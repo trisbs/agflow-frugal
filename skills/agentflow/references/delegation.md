@@ -2,6 +2,8 @@
 
 Read this file before selecting, briefing, or dispatching a worker. It is self-contained; no excluded repository guide is required.
 
+Under the Plus profile, delegation is available only for L3: Medium reasoning has produced a frozen plan, substantial bounded mechanical execution remains, and a Light executor can follow it without judgment. The budget permits one worker, depth one, and no parallel workers. The worker cannot delegate. Its minimal brief contains the approved plan, exact files and change, constraints, forbidden scope, and verification; it does not receive the complete planning transcript and cannot redesign or expand scope.
+
 Incident citations explain past failures. An approved redesign may replace their remedy; preserve protection against any hazard that still exists, not obsolete wording.
 
 ## One route and profile selection
@@ -46,15 +48,15 @@ A report opens on line one with fresh machine-local `* _YYYY-MM-DD HH:MM:SS ±HH
 
 Run synchronously or keep one tracked process and independent wake mechanism. Never end a turn while a worker is pending. Do not impose a fixed elapsed-time deadline on useful worker activity; set one only for a real owner, provider, or task limit.
 
-The devlog's ten-minute checkpoint interval is reporting cadence only: it is never a worker deadline or hang signal. Check process, transport, output, and expected file activity early and periodically. Silent reasoning or unchanged files alone never prove a hang; require concrete process or transport failure evidence before terminating. Preserve diagnostics, record the incident, and relaunch at most twice with a corrected brief. — I-050.
+The devlog's ten-minute checkpoint interval is reporting cadence only: it is never a worker deadline or hang signal. Check process, transport, output, and expected file activity early and periodically. Silent reasoning or unchanged files alone never prove a hang; require concrete process or transport failure evidence before terminating. Preserve diagnostics. Upstream-compatible routing may relaunch at most twice with a corrected brief; the Plus profile permits only one automatic retry of an approach. — I-050.
 
-Each review stage has one stable identity and at most three total worker starts. One preflight failure before any process/model starts is free; every post-start failure counts. Record working-directory access, test access, executable availability, and authentication; unavailable live facts are `SKIP`, never guessed.
+Each review stage has one stable identity. Upstream-compatible routing permits at most three total worker starts; the Plus profile permits one independent reviewer and no replacement review. One preflight failure before any process/model starts is free because it consumes no review invocation; every post-start failure counts. Record working-directory access, test access, executable availability, and authentication; unavailable live facts are `SKIP`, never guessed.
 
 After the ceiling, preserve the unresolved result and stop automatic cycling.
 
 These are attempt ceilings, not retry targets. A failed environment ends the affected check until a concrete correction is available; reuse applicable coordinator evidence and report the limit. An owner stop takes precedence immediately: stop the named worker and identified descendants, verify termination, then investigate secondary problems. Do not relaunch canceled work without renewed authorization.
 
-For an exact `3ways` or `threeways` owner trigger, use the stable `threeways` stage with the configured `better` tier. Prefer an eligible separate reviewer and retain different-family preference among eligible external profiles, recording whether it is external or native and whether context, permissions, family, and read-only enforcement are actually distinct. When no separate reviewer is available, `prefer-independent` permits a labelled host review with one unavailability reason per permitted separate kind; `require-independent` leaves acceptance pending. Freeze one immutable brief, report, and host resolution per start. The trigger permits this one plan review when `allow-ag` is off, never implementation; after three starts, a malformed report, timeout, or owner-only choice, record `Consensus: UNRESOLVED` rather than inventing agreement.
+For an exact `3ways` or `threeways` owner trigger, use the stable `threeways` stage with the configured `better` tier. Prefer an eligible separate reviewer and retain different-family preference among eligible external profiles, recording whether it is external or native and whether context, permissions, family, and read-only enforcement are actually distinct. When no separate reviewer is available, `prefer-independent` permits a labelled host review with one unavailability reason per permitted separate kind; `require-independent` leaves acceptance pending. Freeze one immutable brief, report, and host resolution per start. The trigger permits this one plan review when `allow-ag` is off, never implementation. The Plus profile additionally requires every L5 hard gate, permits at most two perspective starts and one host synthesis, and never retries Debate; unresolved output remains `Consensus: UNRESOLVED`.
 
 ## Procedure and acceptance
 

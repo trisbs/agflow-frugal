@@ -2,6 +2,7 @@
 
 const settings = require('./ag-settings.js')
 const external_runner = require('./external-runner.js')
+const usage_policy = require('./usage-policy.js')
 const fs = require('node:fs')
 const path = require('node:path')
 
@@ -69,7 +70,13 @@ const plan_threeways_debate = facts => {
 	if (!trigger.triggered) return { valid: true, ...trigger }
 	if (!safe_work_root(facts.work_root)) return { valid: false, error: 'threeways work_root must be a non-empty repository-relative path' }
 	if (!Number.isInteger(facts.worker_starts) || facts.worker_starts < 0) return { valid: false, error: 'threeways worker_starts must be a non-negative integer' }
-	if (facts.worker_starts >= 3 || facts.owner_only_choice === true) return { valid: true, ...trigger, permits_launch: false, consensus: 'UNRESOLVED', reason: facts.worker_starts >= 3 ? 'three worker starts reached the fixed ceiling' : 'an owner-only choice remains' }
+	if (facts.plus_profile === true) {
+		const gate = usage_policy.debate_gate(facts)
+		if (!gate.valid) return { ...gate, ...trigger }
+		if (!gate.allowed) return { valid: true, ...trigger, permits_launch: false, consensus: 'UNRESOLVED', deliberation_score: gate.score, reason: gate.reason }
+	}
+	const worker_ceiling = facts.plus_profile === true ? 2 : 3
+	if (facts.worker_starts >= worker_ceiling || facts.owner_only_choice === true) return { valid: true, ...trigger, permits_launch: false, consensus: 'UNRESOLVED', reason: facts.worker_starts >= worker_ceiling ? `${worker_ceiling} worker starts reached the fixed ceiling` : 'an owner-only choice remains' }
 	const round = facts.worker_starts + 1
 	return {
 		valid: true,
@@ -188,7 +195,7 @@ const execute_threeways_debate = async (facts, dependencies = {}) => {
 		const family_record = launched.worker?.family_diversity || 'unavailable'
 		const limitation = launched.worker?.limitation || 'none recorded'
 		write_immutable(filenames.resolution, `${facts.host_resolution}\n\nWorker family diversity: ${family_record}\n\nWorker family limitation: ${limitation}\n\nConsensus: ${consensus}\n\nAttempts: ${plan.round}\n\nSelf-check: The host recorded the debate resolution without authorizing implementation.\n`)
-		return { ...launched, artifacts: plan.artifacts, consensus, retry_required: consensus === 'UNRESOLVED' && plan.round < 3 }
+		return { ...launched, artifacts: plan.artifacts, consensus, retry_required: facts.plus_profile === true ? false : consensus === 'UNRESOLVED' && plan.round < 3 }
 	} catch (error) {
 		return { ...launched, valid: false, error: error.message }
 	}

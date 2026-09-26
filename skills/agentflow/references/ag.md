@@ -12,10 +12,14 @@ Read `references/delegation.md` before selecting or dispatching a worker; it own
 
 Read and validate adjacent `ag.json`, STATUS, the latest unfinished Ask, Git state, and exact current artifacts before choosing work. Record one route: `direct`, `selected_advisors`, `full_pipeline`, or `blocked`, naming operation, `allow-ag`, material risks, named questions, owner confirmation, and plain-language reason. `$target_doc` is the owner conversation and live recovery surface; STATUS is recovery projection, not settings storage.
 
-- `direct`: clear local reversible work whose files, focused test, and final relevant suite are identifiable. The host executes directly when a handoff is unlikely to pay off, or plans a bounded worker assignment when its expected benefit justifies the overhead; neither choice requires pipeline advisors. Honor explicit executor choices, no-delegation, and fast-lane; execution choice does not waive applicable checks or approvals.
+- `direct`: the normal L0–L2 route and the preferred route whenever a handoff is unlikely to reduce total cost. L0/L1 use Light Direct; L2 uses Medium Direct. L3 may use one Light executor only after Medium freezes a bounded plan and substantial mechanical work remains. Honor explicit executor choices, no-delegation, and fast-lane; execution choice does not waive applicable checks or approvals.
 
 - `selected_advisors`: each named advisor answers an important question that direct work cannot settle; naming a stage without stating its question is insufficient.
-- `full_pipeline`: expensive-to-reverse behavior, important trust/subsystem boundary, serious hidden-test risk, or enabled explicit trigger.
+- `full_pipeline`: an enabled exact trigger or L4/L5 work whose unresolved risk cannot be handled by direct reasoning and deterministic verification. Risk alone does not require every pipeline stage.
+
+Treat stages as conditional capabilities rather than mandatory nodes. Understand combines requirements and targeted codewalk. Resolve Uncertainty runs only for a named question. Execute follows the selected class. Verify prefers deterministic oracles. Skip unused capabilities instead of producing placeholder stages.
+
+For Debate, record Decision Ambiguity (`D`), Trade-off Strength (`T`), Impact (`I`), Evidence Gap (`E`), and Irreversibility (`R`) from zero through two. A score of seven or more identifies potential high risk but cannot launch Debate alone. Debate also requires two materially different viable solutions, meaningful trade-offs, substantial consequences, exhaustion of cheaper evidence or experiments, and material disagreement from the one independent reviewer. Its maximum form is `Perspective A + Perspective B → one synthesis → STOP`; consensus is not required and retries are forbidden.
 - `blocked`: an `allow-ag`/owner decision, unavailable confinement, missing evidence, exhausted attempts, or other hard stop prevents work.
 
 `allow-ag: on` permits selected/full routes; `off` blocks them before Agentflow and never silently downgrades; `ask` requires recorded owner approval for complex pipeline jobs. A simple job can use the direct planning route with host or delegated execution under every setting. Ordinary delegation is governed by `references/delegation.md`, not permission to launch pipeline advisors. A route trigger is not a settings change and never overrides `off`; only a separate validated `allow-ag: on` change can enable a later complex pipeline route.
@@ -80,7 +84,7 @@ Security is one defensive pass over declared changed files and trust boundaries.
 
 Acceptance first marks every `R-<n>` as covered, missing, or not proven, then rechecks each `INV-<n>` with real commands, keeping behavior separate from record quality. Missing evidence remains not proven. Neither stage starts an automatic repair loop.
 
-Formal repair is coordinator-only and limited to a fixed stamp, heading, path label, or final boundary from immutable authority/verified evidence; record before/after identities, span, and unchanged outside bytes, then rerun the gate. Substantive defects return to the responsible stage. Review stages keep one identity, preflight working directory/test/executable/authentication, and at most three total starts; one preflight failure before process/model start is free, all post-start failures count, and unavailable facts are `SKIP`.
+Formal repair is coordinator-only and limited to a fixed stamp, heading, path label, or final boundary from immutable authority/verified evidence; record before/after identities, span, and unchanged outside bytes, then rerun the gate. Substantive defects return to the responsible stage. Upstream-compatible review stages retain one identity and at most three total starts. The Plus profile permits one independent reviewer and no replacement review; one preflight failure before process/model start may be corrected because it consumes no review invocation. Unavailable facts are `SKIP`.
 
 ## Worker implementation handoff
 

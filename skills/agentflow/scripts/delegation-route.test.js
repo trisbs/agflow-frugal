@@ -285,6 +285,23 @@ test('threeways preserves one stable stage, immutable artifact names, and the th
 	assert.equal(route.plan_threeways_debate({ ask_text: '3ways', work_root: '../escape', worker_starts: 0 }).valid, false)
 })
 
+test('Plus threeways requires every hard gate and permits at most two perspective starts', () => {
+	const hard_gates = {
+		plus_profile: true,
+		D: 2, T: 2, I: 2, E: 1, R: 1,
+		viable_alternatives: true,
+		meaningful_tradeoffs: true,
+		substantial_consequence: true,
+		cheap_resolution_exhausted: true,
+		reviewer_material_disagreement: true,
+	}
+	const base = { ask_text: 'threeways', work_root: '.agentflow/artifacts/A-001-plan', ...hard_gates }
+	assert.equal(route.plan_threeways_debate({ ...base, worker_starts: 0 }).permits_launch, true)
+	assert.equal(route.plan_threeways_debate({ ...base, worker_starts: 2 }).permits_launch, false)
+	assert.equal(route.plan_threeways_debate({ ...base, worker_starts: 0, cheap_resolution_exhausted: false }).permits_launch, false)
+	assert.equal(route.plan_threeways_debate({ ask_text: 'threeways', work_root: '.agentflow/artifacts/A-001-plan', worker_starts: 0, plus_profile: true }).valid, false)
+})
+
 test('threeways launches only through the supplied unified external runner and configured better worker', async () => {
 	const calls = []
 	const result = await route.launch_threeways_debate({
@@ -396,6 +413,23 @@ test('threeways preserves an honest diagnostic and requires retry when a worker 
 	assert.match(report, /worker diagnostic/)
 	assert.doesNotMatch(report, /^\* _/m)
 	assert.match(report, /HOST-DIAGNOSTIC/)
+})
+
+test('Plus threeways records an unresolved result without a debate retry', async () => {
+	const repo_root = fs.mkdtempSync(path.join(os.tmpdir(), 'threeways-route-'))
+	const result = await route.execute_threeways_debate({
+		ask_id: 'A-001', ask_text: 'threeways', work_root: '.agentflow/artifacts/A-001-plan', worker_starts: 0,
+		plus_profile: true, D: 2, T: 2, I: 2, E: 1, R: 1,
+		viable_alternatives: true, meaningful_tradeoffs: true, substantial_consequence: true,
+		cheap_resolution_exhausted: true, reviewer_material_disagreement: true,
+		repo_root, brief_text: valid_brief(), host_resolution: valid_resolution(), worker_selection: {},
+		runner_options: { source_directory: '/repo' }, runner_arguments: ['exec', 'review'],
+	}, {
+		resolve_worker: () => ({ tier: 'better', recipe_checked: true, executable: 'brain-two', args: [] }),
+		run_external_command: async () => ({ status: 'completed', result: { value: 'not a stamped worker report' } }),
+	})
+	assert.equal(result.consensus, 'UNRESOLVED')
+	assert.equal(result.retry_required, false)
 })
 
 test('threeways refuses false agreement after a failed runner and still records an unresolved result', async () => {

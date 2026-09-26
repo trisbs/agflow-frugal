@@ -49,6 +49,12 @@ const select_cross_check_plan = facts => {
 	for (const name of ['behavior_change', 'trust_boundary', 'broad_change']) {
 		if (typeof facts[name] !== 'boolean') return invalid(`${name} must be a boolean`)
 	}
+	const plus_review_facts_present = has_own(facts, 'material_risk') || has_own(facts, 'deterministic_verification_sufficient')
+	if (plus_review_facts_present) {
+		for (const name of ['material_risk', 'deterministic_verification_sufficient']) {
+			if (typeof facts[name] !== 'boolean') return invalid(`${name} must be a boolean when Plus review facts are supplied`)
+		}
+	}
 	const consequential_error = validate_consequential_facts(facts)
 	if (consequential_error) return invalid(consequential_error)
 	if (facts.workspace_layout_change !== undefined && typeof facts.workspace_layout_change !== 'boolean') return invalid('workspace_layout_change must be a boolean when present')
@@ -75,6 +81,15 @@ const select_cross_check_plan = facts => {
 			reason: facts.skip_reason.trim(),
 			reviewer_checks: [],
 			coordinator_checks: ['record the explicit owner control, automatic narrow result, and tradeoff in the devlog']
+		}
+	}
+	if (plus_review_facts_present && (!facts.material_risk || facts.deterministic_verification_sufficient)) {
+		return {
+			valid: true,
+			level: 'skip',
+			reason: !facts.material_risk ? 'no unresolved material risk qualifies for independent review' : 'deterministic verification resolves the material risk',
+			reviewer_checks: [],
+			coordinator_checks: ['record the Plus review-gate result and the deterministic evidence used'],
 		}
 	}
 

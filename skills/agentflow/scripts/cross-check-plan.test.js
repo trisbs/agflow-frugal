@@ -37,6 +37,14 @@ test('ordinary behavior work selects targeted review', () => {
 	assert.match(result.reviewer_checks.join('\n'), /focused tests/i)
 })
 
+test('Plus review facts are optional and preserve upstream behavior when absent', () => {
+	assert.equal(select_cross_check_plan(facts()).level, 'narrow')
+	assert.equal(select_cross_check_plan(facts({ material_risk: false, deterministic_verification_sufficient: false })).level, 'skip')
+	assert.equal(select_cross_check_plan(facts({ material_risk: true, deterministic_verification_sufficient: true })).level, 'skip')
+	assert.equal(select_cross_check_plan(facts({ material_risk: true, deterministic_verification_sufficient: false })).level, 'narrow')
+	assert.equal(select_cross_check_plan(facts({ material_risk: true })).valid, false)
+})
+
 test('broad size and trust boundaries select full review', () => {
 	assert.equal(select_cross_check_plan(facts({ trust_boundary: true })).level, 'full')
 	assert.equal(select_cross_check_plan(facts({ changed_lines: 500 })).level, 'full')
