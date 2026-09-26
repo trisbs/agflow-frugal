@@ -4,6 +4,8 @@
 
 Give your AI assistant a project notebook, so tomorrow’s conversation can pick up today’s work.
 
+This fork includes an opt-in, compatibility-first Frugal policy for ChatGPT Plus usage. It routes bounded verified work directly to Light, keeps genuine reasoning in one Medium context, limits delegation and review, and reserves Debate for exceptional material disagreement. See [the implemented profile and measurement model](Task.md).
+
 Agentflow has verified integrations for **Codex and Claude Code** and a portable core for any host that provides file and command tools plus enough state retention for capture and closeout. It keeps your requests, decisions, progress, and results in a readable file. You can use it to improve a document, fix a bug, or carry a larger project across several sessions.
 
 - **Start simply:** Type `godev`, then describe the task in your own words.

@@ -1,832 +1,131 @@
-# Task: Fork Agentflow into a ChatGPT Plus-Optimized Agentflow
+# Agentflow Frugal Profile
 
-Repository:
+## Status
 
-https://github.com/agfnow/agentflow
+This repository implements a compatibility-first, ChatGPT Plus-oriented Agentflow profile. The policy is an engineering optimization, not a claim that Agentflow can read a user's remaining ChatGPT Plus quota.
 
-Primary scope:
-
-`skills/agentflow/`
-
-Create a cost-controlled fork or profile of Agentflow specifically designed for sustainable daily use under ChatGPT Plus usage constraints.
-
-The primary objective is:
-
-> Maximize the number of useful software-engineering tasks completed per available usage budget while preserving stronger reasoning only where it materially improves correctness or decision quality.
-
-Do NOT optimize for maximum autonomous reasoning on every task.
-
-Optimize for:
-
-- fewer LLM invocations;
-- cheaper reasoning where sufficient;
-- minimal delegation;
-- minimal context duplication;
-- deterministic verification;
-- bounded retries;
-- rare review;
-- exceptional debate.
-
-Target, as an engineering goal rather than an assumed measured result:
-
-`60–75% lower agentic usage than upstream Agentflow`
-
-while maintaining comparable success rates on ordinary software-engineering tasks.
-
----
-
-# 1. Work in Two Phases
-
-Do not immediately perform a large rewrite.
-
-## Phase A — Audit and Plan
-
-Inspect the existing Agentflow implementation and produce:
-
-1. current architecture summary;
-2. relevant file/script inventory;
-3. current workflow graph;
-4. current model/delegation behavior;
-5. current review/debate/retry behavior;
-6. sources of unnecessary LLM usage;
-7. proposed target architecture;
-8. exact files expected to change;
-9. KEEP / SIMPLIFY / MERGE / CONDITIONAL / REMOVE classification;
-10. compatibility risks.
-
-Then perform exactly ONE critical review of your proposed plan.
-
-The review must specifically look for:
-
-- unnecessary new abstractions;
-- places where cost was moved rather than eliminated;
-- unnecessary model calls;
-- unnecessary controller → worker transitions;
-- deterministic work still being performed by an LLM;
-- incorrect assumptions about ChatGPT Plus quota visibility;
-- retry or debate loops that remain unbounded;
-- scope expansion not justified by evidence.
-
-After this single review, revise the implementation plan once.
-
-Do not create iterative planning/review loops.
-
-Then proceed with implementation.
-
----
-
-# 2. Core Policy: Cheapest-Capable Direct First
-
-The default policy must be:
+The governing rule is:
 
 > Route each task directly to the cheapest reasoning level capable of completing it safely.
 
-Do NOT instantiate a Medium controller for every request.
+The escalation rule is:
 
-Do NOT use:
+> Spend another model call only when its expected information or correctness gain clearly justifies the usage.
 
-`Medium → decide task is easy → Light worker`
+## Architecture
 
-for tasks that could have gone directly to Light.
+The ordinary workflow has four conditional capabilities:
 
-Model selection should happen before substantial planning whenever possible.
+1. **Understand** — combine requirements with a targeted codewalk.
+2. **Resolve Uncertainty** — use only for a named unresolved question.
+3. **Execute** — follow the selected execution class directly.
+4. **Verify** — prefer deterministic evidence over another model invocation.
 
----
+The common path is `Understand → Execute → Deterministic Verify → Done`.
 
-# 3. Execution Classes
+Existing Agentflow notebook, ownership, Git, parsing, validation, settings, and closeout infrastructure remains intact.
 
-Introduce a simple execution classification.
+## Execution classes
 
-## L0 — Mechanical
+- **L0 Mechanical:** Light Direct for specified, bounded work with deterministic verification.
+- **L1 Simple:** Light Direct for an obvious, reversible approach with deterministic verification.
+- **L2 Reasoning:** Medium Direct for meaningful uncertainty, diagnosis, planning, or trade-offs.
+- **L3 Reasoning plus mechanical execution:** Medium freezes the decisions; one Light executor may perform substantial bounded mechanical work.
+- **L4 High Risk:** Medium Direct; at most one independent review when deterministic verification cannot resolve material risk.
+- **L5 Exceptional Deliberation:** L4 plus materially different viable solutions and a substantive reviewer disagreement. This is the only Debate-eligible class.
 
-Examples:
+Classification is domain-neutral. It uses judgment, uncertainty, consequence, reversibility, verification strength, and remaining mechanical execution. File count, diff size, language, framework, and subsystem are evidence rather than class rules. Ambiguous work uses Medium Direct.
 
-- apply an explicitly specified change;
-- rename a symbol;
-- change a constant;
-- update configuration;
-- run specified commands;
-- formatting;
-- apply an approved diff;
-- mechanical repetitive edits.
+## Deterministic policy
 
-Characteristics:
+`skills/agentflow/scripts/usage-policy.js` provides pure functions for classification, routing, review and Debate gates, budget pressure, and telemetry records. It makes no model call and writes no state.
 
-- essentially no design judgment;
-- bounded scope;
-- low consequence;
-- deterministic verification available.
+Existing review callers remain compatible. Plus-aware callers may supply `material_risk` and `deterministic_verification_sufficient`; callers that omit both retain upstream cross-check behavior.
 
-Route:
+The exact `3ways` and `threeways` triggers remain available. When `plus_profile: true` is supplied, the deterministic L5 hard gate is required, perspective starts are capped at two, and Debate is never retried.
 
-`Light Direct`
+## Default budget
 
-Use GPT-5.6 Sol with low/light reasoning effort.
+- external workers: 1;
+- delegation depth: 1;
+- parallel workers: 0;
+- independent reviewers: 1;
+- Debate perspectives: 2;
+- Debate syntheses: 1;
+- Debate retries: 0;
+- retries per approach: 1;
+- discovery iterations: 2;
+- expensive external analysis calls: 2;
+- pipeline backward transitions: 1;
+- routine automatic learning: disabled.
 
----
+Reaching a limit is a stop condition. Pressure progresses through `NORMAL → CAUTION → CONSERVE → STOP` using workflow-local observations. CONSERVE removes optional delegation, ordinary review, Debate, and scope expansion. STOP returns verified findings and unresolved items.
 
-## L1 — Simple
+## Context policy
 
-Examples:
+- Light Direct receives the request, relevant files, constraints, and verification command.
+- A Light executor receives the approved plan, exact target files and edits, constraints, and verification.
+- A reviewer receives the requirement, decision, relevant diff, deterministic evidence, and unresolved risk.
+- Debate receives only the disputed decision, viable options, constraints, evidence, and reviewer disagreement.
 
-- straightforward local bug fix;
-- small implementation with an obvious approach;
-- limited file scope;
-- easy rollback.
+Initial discovery is limited to five plausible candidate files, dependency depth one, and two iterations. Evidence may justify expansion; the file count is not an absolute correctness boundary.
 
-Characteristics:
+## Review and Debate
 
-- minor judgment;
-- no meaningful architecture decision;
-- low risk;
-- deterministic verification available.
+Independent review is conditional on unresolved material risk that deterministic verification cannot settle. Medium reasoning alone does not justify review.
 
-Preferred route:
+The Debate hard gate requires all of the following:
 
-`Light Direct`
+1. two materially different viable solutions;
+2. meaningful trade-offs;
+3. substantial consequences for a poor choice;
+4. exhaustion of clarification, evidence, inspection, deterministic verification, and cheap experiments;
+5. material disagreement from the independent reviewer.
 
-Escalate to Medium only if material uncertainty appears during execution.
+The Deliberation Decision Score records Decision Ambiguity, Trade-off Strength, Impact, Evidence Gap, and Irreversibility from zero through two. A score of seven or more indicates potential high risk but cannot launch Debate alone.
 
----
+Maximum Debate form: `Perspective A + Perspective B → one synthesis → STOP`.
 
-## L2 — Reasoning
+## Telemetry and savings measurement
 
-Examples:
+Optional version-1 telemetry records observed execution class and path, model/effort when known, model calls, workers, reviews, debates, retries, tool calls, tokens when available, elapsed time, outcome, pressure, and stop reason. Missing measurements remain `null`. Telemetry never adds a model call.
 
-- debugging;
-- root-cause analysis;
-- planning;
-- architecture reasoning;
-- meaningful trade-offs;
-- non-obvious implementation decisions.
+Savings must be measured against the same representative task set:
 
-Route:
+`usage reduction = 1 − (Plus-profile usage / upstream usage)`
 
-`GPT-5.6 Sol / Medium`
+Report completion rate and correctness beside usage. Do not count a cheaper incomplete task as a successful saving.
 
-Prefer:
+Expected, unmeasured engineering ranges for a workload dominated by bounded tasks are:
 
-`Medium Direct`
+- small-task workload: 45–65% fewer model invocations;
+- highly mechanical workload: potentially 60–75%;
+- reasoning-heavy workload: 20–40%;
+- high-risk workload: 10–30%.
 
-Do not automatically create a worker afterward.
+These ranges overlap across saving mechanisms and are not guarantees. Exact reduction requires an A/B evaluation.
 
----
+### Modeled bounded-task scenario
 
-## L3 — Reasoning + Substantial Mechanical Execution
+For planning purposes, assume a representative mix of 60% L0/L1, 25% L2, 10% L3, and 5% L4 work. If the upstream-equivalent path averages four model calls for L0/L1 and three for the other classes, it averages 3.60 calls per task. The Frugal routes average 1.15 calls per task when L0/L1 and L2 are direct, L3 uses one executor, and L4 uses one review:
 
-Use when:
+`1 − (1.15 / 3.60) = 68.1% modeled invocation reduction`
 
-1. Medium reasoning is required to determine the correct solution;
-2. a bounded implementation plan is now approved;
-3. significant mechanical work remains;
-4. a Light worker can execute without redesigning the solution.
+This quantifies the design under explicit assumptions; it is not observed production savings. A different upstream route mix or review rate changes the result.
 
-Route:
+## Route examples
 
-`Medium judgment → one Light executor`
+- **Light Direct:** update an explicit configuration value, run its validator, and finish with no worker or review.
+- **Medium Direct:** diagnose a non-obvious local defect, implement the fix in the same reasoning context, and run focused tests.
+- **Medium → Light:** resolve an architectural choice in Medium, freeze a repetitive multi-file edit, and give one Light executor only the plan and verification.
+- **Review:** use one independent reviewer for a difficult-to-reverse interface change whose remaining risk is not settled by tests.
+- **Debate:** after that reviewer identifies a material disagreement between two consequential viable designs, collect two perspectives and synthesize once.
 
-The Light executor MUST NOT:
+## Compatibility and limitations
 
-- redesign;
-- re-plan;
-- expand scope;
-- reinterpret requirements;
-- introduce architectural changes.
-
-Its job is execution only.
-
-Do not create a Light worker for trivial remaining work if continuing with Medium is cheaper.
-
----
-
-## L4 — High Risk
-
-Examples:
-
-- security boundary;
-- persistent-data migration;
-- partition layout;
-- provisioning;
-- public API/ABI;
-- difficult rollback;
-- irreversible or field-impacting changes.
-
-Route:
-
-`Medium reasoning`
-
-Then use at most:
-
-`one independent review`
-
-only when deterministic verification is insufficient.
-
-High reasoning may be used for validation only when consequence justifies it.
-
----
-
-## L5 — Exceptional Deliberation
-
-Use only for high-consequence decisions where materially different viable solutions remain and independent review identifies a substantive disagreement.
-
-This is the only class eligible for Debate.
-
----
-
-# 4. Cheap Task Router
-
-Implement the cheapest practical task classifier.
-
-Prefer, in order:
-
-1. deterministic rules;
-2. structured task metadata already produced by the workflow;
-3. existing routing information;
-4. minimal model classification only when truly ambiguous.
-
-Do NOT create a dedicated Medium or High reasoning classifier for every task.
-
-Routing must not cost more than the optimization it provides.
-
----
-
-# 5. Normal Workflow
-
-The common path should be:
-
-`Understand → Execute → Deterministic Verify → Done`
-
-Do not force every task through:
-
-- requirements agent;
-- research agent;
-- planner;
-- executor;
-- reviewer;
-- cross-check;
-- learning agent.
-
-Workflow stages should be capabilities, not mandatory pipeline nodes.
-
----
-
-# 6. Reduce the Existing Workflow to Four Logical Capabilities
-
-## Understand
-
-Combine:
-
-- requirements;
-- targeted codewalk.
-
-Initial repository inspection budget:
-
-- max 5 plausible candidate files;
-- dependency depth 1;
-- max 2 discovery iterations.
-
-Expand only when concrete evidence indicates the relevant behavior exists outside the current scope.
-
-Do not inspect unrelated subsystems "just in case."
-
----
-
-## Resolve Uncertainty
-
-Invoke only when a named uncertainty exists.
-
-Priority:
-
-`existing evidence > documentation > inspection > deterministic experiment > additional reasoning`
-
-Do not perform generic exploration.
-
-Do not perform a spike unless evidence or inspection cannot cheaply resolve the uncertainty.
-
----
-
-## Execute
-
-Use the execution classes above.
-
-Direct execution is preferred.
-
-Delegation is not a mechanism for keeping the controller context clean.
-
-Delegate only when it reduces expected total cost or isolates substantial bounded mechanical work.
-
----
-
-## Verify
-
-Prefer deterministic verification:
-
-- compiler;
-- tests;
-- static analysis;
-- lint;
-- schema validators;
-- assertions;
-- benchmarks where appropriate;
-- `git diff --check`;
-- targeted command output.
-
-Do not spend another model invocation merely to increase confidence when a deterministic oracle exists.
-
----
-
-# 7. Hard Default Budget
-
-For the Plus-optimized profile, use these default limits:
-
-- external workers: max 1;
-- delegation depth: max 1;
-- parallel workers: disabled;
-- independent reviewers: max 1;
-- debate perspectives: max 2;
-- debate synthesis rounds: max 1;
-- debate retries: 0;
-- automatic retries per approach: max 1;
-- search/discovery iterations: max 2;
-- expensive external analysis/tool calls: max 2;
-- pipeline backward transition: max 1;
-- automatic learning: disabled.
-
-Reaching a limit is a STOP condition.
-
-Do NOT automatically:
-
-- add another agent;
-- increase reasoning effort;
-- retry repeatedly;
-- broaden repository scope;
-- start a debate;
-- perform more searches.
-
-Report the unresolved issue instead.
-
----
-
-# 8. Deliberation Gate
-
-Debate must be exceptional.
-
-Evaluate:
-
-- Decision Ambiguity — D
-- Trade-off Strength — T
-- Impact — I
-- Evidence Gap — E
-- Irreversibility — R
-
-Each ranges from 0–2.
-
-Compute:
-
-`DDS = D + T + I + E + R`
-
-Interpretation:
-
-- 0–3 → normal direct path
-- 4–6 → normal reasoning path; deterministic verification preferred
-- 7–10 → potentially high-risk
-
-DDS alone MUST NOT launch Debate.
-
----
-
-# 9. Review Gate
-
-Independent review is allowed only when there is meaningful risk that deterministic verification cannot resolve.
-
-Typical triggers:
-
-- architecture decision;
-- security boundary;
-- persistent-state behavior;
-- migration;
-- public API/ABI;
-- difficult rollback;
-- incomplete verification;
-- significant unresolved assumption.
-
-A Medium task MUST NOT receive a review merely because review may improve confidence.
-
-Perform at most one review.
-
----
-
-# 10. Debate Hard Gate
-
-Debate may execute only when ALL are true:
-
-1. two or more materially different solutions remain viable;
-2. meaningful trade-offs remain;
-3. selecting poorly has substantial consequence;
-4. tests, evidence, documentation, inspection, or user clarification cannot cheaply resolve the issue;
-5. the independent reviewer identifies a material disagreement.
-
-Do NOT debate when:
-
-- deterministic validation can answer the question;
-- an experiment is cheaper;
-- information is merely missing;
-- the user has already selected the approach;
-- implementation is mechanical;
-- rollback is cheap;
-- disagreement concerns style, naming, formatting, documentation, or minor optimization.
-
-Use:
-
-`evidence > experiment > deterministic verification > review > debate`
-
----
-
-# 11. Material Disagreement Definition
-
-A disagreement is material only when resolving it differently would substantially change:
-
-- architecture;
-- security model;
-- migration strategy;
-- persistent-data design;
-- compatibility behavior;
-- public interface;
-- provisioning model;
-- another high-consequence decision.
-
-Minor implementation preferences do not qualify.
-
----
-
-# 12. Bounded Debate
-
-Remove:
-
-- "until consensus";
-- recursive rebuttal;
-- unlimited 3-way discussion;
-- repeated critic loops.
-
-Maximum form:
-
-`Perspective A + Perspective B → one synthesis → STOP`
-
-Optional critique may be incorporated into the single synthesis step.
-
-Maximum:
-
-- 2 perspectives;
-- 1 synthesis;
-- 0 debate retries.
-
-Consensus is not required.
-
-The synthesis should report:
-
-- agreements;
-- disagreements;
-- evidence;
-- assumptions;
-- trade-offs;
-- unresolved questions;
-- recommended next test/evidence if applicable.
-
----
-
-# 13. Preserve Deterministic Node.js Infrastructure
-
-Do not remove useful Node.js scripts merely to reduce file count.
-
-Prefer deterministic code for:
-
-- state management;
-- devlog persistence;
-- parsing;
-- validation;
-- git inspection;
-- stage transitions;
-- budget enforcement;
-- context extraction;
-- telemetry;
-- routing rules.
-
-Moving work from LLM reasoning into deterministic Node.js code is encouraged when correct.
-
----
-
-# 14. Context Budget
-
-Avoid context amplification across agents.
-
-Use minimal role-specific context.
-
-## Light Direct
-
-Provide only:
-
-- request;
-- directly relevant files/context;
-- constraints;
-- verification command.
-
-## Light Executor
-
-Provide:
-
-- approved plan;
-- exact target files;
-- exact requested change;
-- constraints;
-- required verification.
-
-Do not send full planning history.
-
-## Reviewer
-
-Provide:
-
-- relevant requirement;
-- important decision;
-- relevant diff;
-- deterministic test output;
-- unresolved risk.
-
-Do not provide unrelated exploration logs.
-
-## Debate
-
-Provide only:
-
-- disputed decision;
-- viable options;
-- constraints;
-- known evidence;
-- material reviewer disagreement.
-
-Never copy the complete conversation/devlog into each debate participant.
-
----
-
-# 15. Retry Policy
-
-Maximum automatic retry of an approach:
-
-`1`
-
-If materially the same failure occurs again:
-
-`STOP`
-
-Do not silently:
-
-- retry with more context;
-- switch to High reasoning;
-- start another worker;
-- broaden scope;
-- start Debate.
-
-Escalation requires a concrete reason.
-
----
-
-# 16. Learning
-
-Disable routine automatic learning.
-
-Run learning only when:
-
-- a significant assumption was disproven;
-- the same failure pattern has recurred;
-- a reusable workflow improvement was discovered;
-- the user explicitly requests knowledge capture.
-
-Successful normal tasks should not invoke a learning model.
-
----
-
-# 17. Plus Budget Pressure
-
-Do not assume Agentflow can read the user's actual remaining ChatGPT Plus quota unless an explicit supported interface provides that information.
-
-Instead track workflow-local usage indicators such as:
-
-- LLM invocation count;
-- model/reasoning class;
-- workers spawned;
-- reviewer count;
-- debate count;
-- retries;
-- tool/search count;
-- context size or tokens when available.
-
-Support internal pressure states such as:
-
-`NORMAL → CAUTION → CONSERVE → STOP`
-
-Example behavior:
-
-## NORMAL
-
-Normal routing rules.
-
-## CAUTION
-
-Avoid optional delegation and exploration.
-
-## CONSERVE
-
-- no new worker unless required for already-approved mechanical execution;
-- no review except high-risk;
-- no debate;
-- no scope expansion;
-- prefer Light where safe.
-
-## STOP
-
-Return established results and unresolved items rather than automatically spending more usage.
-
----
-
-# 18. Telemetry
-
-Add lightweight telemetry so upstream and Plus behavior can be compared.
-
-Record where available:
-
-- task execution class;
-- execution path;
-- selected model/reasoning effort;
-- LLM calls;
-- workers;
-- reviews;
-- debates;
-- retries;
-- tool calls;
-- input/output tokens;
-- elapsed time;
-- success/failure;
-- budget stop reason.
-
-Do not add an LLM call for telemetry.
-
----
-
-# 19. Required Tests
-
-Test at least:
-
-### Mechanical Task
-
-Expected:
-
-`Light Direct`
-
-No Medium planning.
-
-No worker.
-
-No review.
-
-No debate.
-
----
-
-### Simple Local Task
-
-Expected:
-
-Light Direct where safe.
-
-Escalation only if meaningful uncertainty appears.
-
----
-
-### Reasoning Task
-
-Expected:
-
-`Medium Direct`
-
-No worker unless substantial mechanical execution remains.
-
----
-
-### Planned Large Mechanical Change
-
-Expected:
-
-`Medium plan → one Light executor`
-
-No second worker.
-
-No executor redesign.
-
----
-
-### High-Risk Without Material Disagreement
-
-Expected:
-
-`Medium → at most one review → Done`
-
-No debate.
-
----
-
-### High-Risk With Material Disagreement
-
-Expected:
-
-bounded Debate is allowed.
-
----
-
-### Deterministic Oracle Available
-
-Expected:
-
-no Debate.
-
-Prefer deterministic result.
-
----
-
-### Cheap Experiment Available
-
-Expected:
-
-experiment instead of Debate.
-
----
-
-### Retry Failure
-
-Second equivalent failure must stop.
-
----
-
-### Budget Exhaustion
-
-Workflow must stop rather than automatically escalating.
-
----
-
-# 20. Preserve Compatibility Where Cheap
-
-Preserve upstream interfaces and state formats where doing so has low complexity.
-
-Do not preserve complicated legacy behavior merely for theoretical compatibility.
-
-Prefer:
-
-- existing command compatibility;
-- existing devlog compatibility;
-- existing deterministic helpers;
-
-while changing expensive defaults to conditional or opt-in behavior.
-
----
-
-# 21. Required Deliverables
-
-After the single planning review and implementation, provide:
-
-1. final architecture;
-2. changed-file list;
-3. KEEP / SIMPLIFY / MERGE / CONDITIONAL / REMOVE summary;
-4. behavioral differences from upstream;
-5. tests and results;
-6. telemetry mechanism;
-7. known limitations;
-8. examples for:
-   - Light Direct;
-   - Medium Direct;
-   - Medium → Light;
-   - Review;
-   - Debate;
-9. estimated sources of usage reduction.
-
-Do not claim an exact cost reduction unless it was measured.
-
----
-
-# Success Criteria
-
-A healthy Plus-optimized workload should predominantly use:
-
-1. Light Direct for low-level tasks;
-2. Medium Direct for genuine reasoning tasks;
-3. Medium → Light only when substantial bounded execution justifies another model call;
-4. independent review only for meaningful high-risk decisions;
-5. Debate only for rare material disagreement involving high-consequence decisions.
-
-The architecture should make the cheap path the shortest path.
-
-The key design rule is:
-
-> Cheapest-Capable Direct First.
-
-And the escalation rule is:
-
-> Spend additional model calls only when the expected information or correctness gain clearly justifies the additional usage.
+- Existing state and configuration formats remain valid.
+- Existing command syntax is preserved.
+- No `ag.json` migration or telemetry database is introduced.
+- Upstream behavior is retained when optional Plus facts are absent.
+- Agentflow cannot infer actual ChatGPT Plus quota without a supported interface.
+- The policy can reduce optional reasoning, but deterministic verification quality still depends on the project and available environment.
