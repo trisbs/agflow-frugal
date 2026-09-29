@@ -1,10 +1,10 @@
-# Agentflow v8.3.3
+# Agentflow Frugal v8.4.0
 
 **English** · [繁體中文](README.zh-tw.md)
 
 Give your AI assistant a project notebook, so tomorrow’s conversation can pick up today’s work.
 
-This fork includes an opt-in, compatibility-first Frugal policy for ChatGPT Plus usage. It routes bounded verified work directly to Light, keeps genuine reasoning in one Medium context, limits delegation and review, and reserves Debate for exceptional material disagreement. See [the implemented profile and measurement model](Task.md).
+Agentflow Frugal is a fork based on upstream Agentflow v8.3.3. It adds an opt-in, compatibility-first Frugal policy for ChatGPT Plus usage. It routes bounded verified work directly to Light, keeps genuine reasoning in one Medium context, limits delegation and review, and reserves Debate for exceptional material disagreement. See [the implemented profile and measurement model](Task.md).
 
 Agentflow has verified integrations for **Codex and Claude Code** and a portable core for any host that provides file and command tools plus enough state retention for capture and closeout. It keeps your requests, decisions, progress, and results in a readable file. You can use it to improve a document, fix a bug, or carry a larger project across several sessions.
 
@@ -21,16 +21,16 @@ You need Node.js 18 or newer and a host with file and command tools. Codex and C
 Run this in a terminal and choose your assistant and installation scope:
 
 ```sh
-npx skills add agfnow/agentflow
+npx skills add trisbs/agflow-frugal --skill agflow-frugal
 ```
 
 For the Claude Code plugin route, add the marketplace in Claude Code:
 
 ```text
-/plugin marketplace add agfnow/agentflow
+/plugin marketplace add trisbs/agflow-frugal
 ```
 
-Then install the `agentflow` plugin from that marketplace. Plugin updates follow your [Claude Code marketplace update settings](https://code.claude.com/docs/en/discover-plugins#configure-auto-updates). Start a new assistant session after installation or updates.
+Then install the `agflow-frugal` plugin from that marketplace. Plugin updates follow your [Claude Code marketplace update settings](https://code.claude.com/docs/en/discover-plugins#configure-auto-updates). Start a new assistant session after installation or updates.
 
 ## Choose the main model
 
@@ -41,12 +41,12 @@ For Codex, we recommends **`gpt-5.6-sol/low` as the most stable coordinator choi
 If you installed through `npx skills add`, periodically run:
 
 ```sh
-npx skills update agentflow
+npx skills update agflow-frugal
 ```
 
-The [Skills CLI](https://github.com/vercel-labs/skills#skills-update) takes the installed skill name for updates. `agfnow/agentflow` is the installation source, so `npx skills update agfnow/agentflow` is not the current name-based update syntax. Add `-g` for global installs, or run from the project with `-p` for project installs.
+The [Skills CLI](https://github.com/vercel-labs/skills#skills-update) takes the installed skill name for updates. `trisbs/agflow-frugal` is the installation source, so `npx skills update trisbs/agflow-frugal` is not the current name-based update syntax. Add `-g` for global installs, or run from the project with `-p` for project installs.
 
-We recommend a weekly **crontab** job on macOS or Linux if you want automatic updates. Ask your agent to set it up for your installation. The [guide](skills/agentflow/docs/AG_GUIDE.md#keep-the-skill-up-to-date) includes a Monday-morning example, explicit paths, and logging.
+We recommend a weekly **crontab** job on macOS or Linux if you want automatic updates. Ask your agent to set it up for your installation. The [guide](skills/agflow-frugal/docs/AG_GUIDE.md#keep-the-skill-up-to-date) includes a Monday-morning example, explicit paths, and logging.
 
 ## Try it
 
@@ -73,23 +73,23 @@ Ask your agent to run `agf setup`, or run it in a terminal if the shortcut is av
 For a global installation at one of these locations, run the matching setup file. For another installation location, ask your agent to locate its installed skill first.
 
 ```sh
-node "$HOME/.codex/skills/agentflow/scripts/setup.js"
+node "$HOME/.codex/skills/agflow-frugal/scripts/setup.js"
 ```
 
 ```sh
-node "$HOME/.claude/skills/agentflow/scripts/setup.js"
+node "$HOME/.claude/skills/agflow-frugal/scripts/setup.js"
 ```
 
 </details>
 
 ## Read next
 
-- [Everyday user guide](skills/agentflow/docs/AG_GUIDE.md), with the YouTube introduction.
+- [Everyday user guide](skills/agflow-frugal/docs/AG_GUIDE.md), with the YouTube introduction.
 
-- [繁體中文使用指南](skills/agentflow/docs/AG_GUIDE.zh-tw.md).
+- [繁體中文使用指南](skills/agflow-frugal/docs/AG_GUIDE.zh-tw.md).
 
 - [Changelog](docs/CHANGELOG.md), newest version first.
 
-- [Script reference](skills/agentflow/scripts/README.md), for technical setup and recovery.
+- [Script reference](skills/agflow-frugal/scripts/README.md), for technical setup and recovery.
 
 Project settings live in `ag.json`, using the version-8 configuration format. Type `settings` to inspect them. Existing v7 files migrate conservatively when opened. `allowed-worker` is an unordered permission list of external, internal, and host routes; its order has no execution meaning. `cli-provider` filters only external profiles. Model profiles live under `external-workers`, and advisor choices under `pipeline-roles`.

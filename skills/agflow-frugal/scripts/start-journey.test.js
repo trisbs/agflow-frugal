@@ -74,7 +74,7 @@ for (const mode of ['normal', 'inline', 'resume', 'comma-resume', 'cosmetic', 'n
 	const archive_retry = mode === 'archive-retry';
 	const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agf-start-journey-')));
 	const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agf-codex-home-')));
-	const codex_skill = path.join(home, '.codex', 'skills', 'agentflow');
+	const codex_skill = path.join(home, '.codex', 'skills', 'agflow-frugal');
 	fs.mkdirSync(path.dirname(codex_skill), { recursive: true });
 	fs.symlinkSync(SKILL_ROOT, codex_skill, 'dir');
 	const notebook = '.agentflow/devlog.md';
@@ -113,7 +113,7 @@ for (const mode of ['normal', 'inline', 'resume', 'comma-resume', 'cosmetic', 'n
 			assert.equal(first_output.stream_decision.open_new_stream, false);
 		}
 		if (!non_git) assert.deepEqual(first_output.changed_paths.sort(), ['.agentflow/devlog.md', '.gitignore', 'ag.json']);
-		assert.equal(fs.existsSync(path.join(home, '.claude', 'skills', 'agentflow')), false);
+		assert.equal(fs.existsSync(path.join(home, '.claude', 'skills', 'agflow-frugal')), false);
 		assert.match(fs.readFileSync(path.join(root, notebook), 'utf8'), /journey owner request/);
 
 		const second = run(root, host_command, resuming ? (mode === 'comma-resume' ? 'fast-lane, no over-engineering\n' : 'fast-lane\n') : owner_request, host_env);

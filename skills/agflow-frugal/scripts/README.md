@@ -168,7 +168,7 @@ numbers, integers, strings, and arrays must retain their declared JSON types.
 
 ## Tests
 
-Run from `skills/agentflow/scripts`:
+Run from `skills/agflow-frugal/scripts`:
 
 ```text
 node --test *.test.js

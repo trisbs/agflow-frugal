@@ -9,10 +9,10 @@ const repo_root = path.resolve(__dirname, '..', '..', '..')
 const read = relative_path => fs.readFileSync(path.join(repo_root, relative_path), 'utf8')
 
 test('streams off remains a visible no-automatic-stream mode', () => {
-	const skill = read('skills/agentflow/SKILL.md')
-	const streams = read('skills/agentflow/references/streams.md')
-	const english_guide = read('skills/agentflow/docs/AG_GUIDE.md')
-	const chinese_guide = read('skills/agentflow/docs/AG_GUIDE.zh-tw.md')
+	const skill = read('skills/agflow-frugal/SKILL.md')
+	const streams = read('skills/agflow-frugal/references/streams.md')
+	const english_guide = read('skills/agflow-frugal/docs/AG_GUIDE.md')
+	const chinese_guide = read('skills/agflow-frugal/docs/AG_GUIDE.zh-tw.md')
 
 	assert.match(skill, /streams: ask\|always\|off/)
 	for (const document of [skill, streams]) {

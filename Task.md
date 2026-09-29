@@ -38,7 +38,7 @@ Classification is domain-neutral. It uses judgment, uncertainty, consequence, re
 
 ## Deterministic policy
 
-`skills/agentflow/scripts/usage-policy.js` provides pure functions for classification, routing, review and Debate gates, budget pressure, and telemetry records. It makes no model call and writes no state.
+`skills/agflow-frugal/scripts/usage-policy.js` provides pure functions for classification, routing, review and Debate gates, budget pressure, and telemetry records. It makes no model call and writes no state.
 
 Existing review callers remain compatible. Plus-aware callers may supply `material_risk` and `deterministic_verification_sufficient`; callers that omit both retain upstream cross-check behavior.
 

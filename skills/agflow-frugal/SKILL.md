@@ -1,11 +1,13 @@
 ---
-name: "agentflow"
+name: "agflow-frugal"
 description: "Fast file-logged work with Git evidence and on-demand development machinery. Triggered by godev/devlog/ag/agentflow/fast-lane."
 metadata:
-  version: "8.3.3"
+  version: "8.4.0"
 ---
 
-# Agentflow v8.3.3
+# Agentflow Frugal v8.4.0
+
+Agentflow Frugal is a compatibility-first fork based on upstream Agentflow v8.3.3.
 
 Agentflow keeps owner conversation and live recovery in a configured notebook; advanced rules load only on demand.
 

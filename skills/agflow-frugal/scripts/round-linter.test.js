@@ -147,7 +147,7 @@ const tracker_facts = (text, overrides = {}) => ({
     current: true,
     trusted: true,
     coordinator_read: true,
-    path: 'skills/agentflow/scripts/round-linter.js',
+    path: 'skills/agflow-frugal/scripts/round-linter.js',
     identity: 'a'.repeat(64)
   }],
   evidence_commit_verified: true,
@@ -210,7 +210,7 @@ node_test.test('tracker rejects unsafe or untrusted file evidence', () => {
     evidence: [{ id: 'E-1', current: true, trusted: true, coordinator_read: true, path: '../outside.md', identity: 'a'.repeat(64) }]
   })).status, 'fail');
   node_assert.strictEqual(lint_tracker(tracker_facts(valid_tracker('active'), {
-    evidence: [{ id: 'E-1', current: true, trusted: true, coordinator_read: true, worker_only: true, path: 'skills/agentflow/scripts/round-linter.js', identity: 'a'.repeat(64) }]
+    evidence: [{ id: 'E-1', current: true, trusted: true, coordinator_read: true, worker_only: true, path: 'skills/agflow-frugal/scripts/round-linter.js', identity: 'a'.repeat(64) }]
   })).status, 'fail');
   node_assert.strictEqual(lint_tracker(tracker_facts(valid_tracker('active'), {
     alternate_paths: ['features/add-tracker/other/tracker.md']
@@ -1172,11 +1172,11 @@ const shared_codewalk_evidence = (overrides = {}) => ({
   answered_questions: ['Which current code paths and boundaries does this request touch?'],
   shared_coverage: true,
   discovery_facts: {
-    verified_paths: ['skills/agentflow/scripts/round-linter.js'],
+    verified_paths: ['skills/agflow-frugal/scripts/round-linter.js'],
     fact_inference_labels: ['fact: route decisions are linted before execution'],
     public_boundaries: ['round-linter route decision'],
     conventions: ['CommonJS modules'],
-    likely_edit_locations: ['skills/agentflow/scripts/round-linter.js'],
+    likely_edit_locations: ['skills/agflow-frugal/scripts/round-linter.js'],
     focused_commands: ['node --test round-linter.test.js'],
     unexamined_areas: ['unrelated adapters'],
   },
@@ -1806,7 +1806,7 @@ node_test.test('cross-check rejects missing or conflicting recorded decisions wh
   node_assert.strictEqual(status_for(missing, 'cross_check').status, 'fail');
   const conflict = lint_round({
     devlog_text,
-    review_decision: { status: 'not-requested', reason: 'no change', changed_files: ['skills/agentflow/SKILL.md'], record_roots: ['.agentflow/'] }
+    review_decision: { status: 'not-requested', reason: 'no change', changed_files: ['skills/agflow-frugal/SKILL.md'], record_roots: ['.agentflow/'] }
   });
   node_assert.strictEqual(status_for(conflict, 'cross_check').status, 'fail');
   node_assert.match(status_for(conflict, 'cross_check').detail, /conflict|implementation changed/i);
@@ -1875,7 +1875,7 @@ node_test.test('cross-check derives not-requested conflicts from changed paths i
 
   const changed = lint_round({
     devlog_text,
-    review_decision: { status: 'not-requested', reason: 'no source, test, configuration, or user-document change', changed_files: ['skills/agentflow/scripts/stop-hook.js'], record_roots: ['.agentflow/'] }
+    review_decision: { status: 'not-requested', reason: 'no source, test, configuration, or user-document change', changed_files: ['skills/agflow-frugal/scripts/stop-hook.js'], record_roots: ['.agentflow/'] }
   });
   node_assert.strictEqual(status_for(changed, 'cross_check').status, 'fail');
   node_assert.match(status_for(changed, 'cross_check').detail, /conflicts/i);

@@ -23,10 +23,10 @@ If you fill in the next Ask after its predecessor completes, asking Agentflow to
 Install the skill from a terminal:
 
 ```sh
-npx skills add agfnow/agentflow
+npx skills add trisbs/agflow-frugal --skill agflow-frugal
 ```
 
-Choose the assistant you use and whether to install for this project or all your projects. Then start a new assistant session so it can load the skill. Claude Code also has a plugin installation route; see the [public README](https://github.com/agfnow/agentflow#install).
+Choose the assistant you use and whether to install for this project or all your projects. Then start a new assistant session so it can load the skill. Claude Code also has a plugin installation route; see the [public README](https://github.com/trisbs/agflow-frugal#install).
 
 For Codex, the Agentflow maintainer recommends **`gpt-5.6-sol/low` as the most stable coordinator choice in their use**. This means model `gpt-5.6-sol` with reasoning effort `low`, running the main conversation and coordinating work. It is a project recommendation; your task and available models still matter. [OpenAI’s model documentation](https://developers.openai.com/api/docs/models/gpt-5.6-sol) confirms that this model supports `low` effort.
 
@@ -54,16 +54,16 @@ godev
 If you installed with `npx skills add`, periodically run:
 
 ```sh
-npx skills update agentflow
+npx skills update agflow-frugal
 ```
 
-The current CLI updates by **installed skill name**. Use `agentflow` here; `agfnow/agentflow` is the source used by `skills add`. The source-style command `npx skills update agfnow/agentflow` is not the current name-based syntax. Add `-g` for a global installation, or run from your project with `-p` for a project installation. See the [Skills update instructions](https://github.com/vercel-labs/skills#skills-update).
+The current CLI updates by **installed skill name**. Use `agflow-frugal` here; `trisbs/agflow-frugal` is the source used by `skills add`. The source-style command `npx skills update trisbs/agflow-frugal` is not the current name-based syntax. Add `-g` for a global installation, or run from your project with `-p` for a project installation. See the [Skills update instructions](https://github.com/vercel-labs/skills#skills-update).
 
 For a weekly reminder-free update on macOS or Linux, ask your assistant to help set up **crontab**, the system’s task scheduler. For example, this runs every Monday at 9 a.m. for a global installation:
 
 ```cron
 PATH=/absolute/node/bin:/usr/local/bin:/usr/bin:/bin
-0 9 * * 1 /absolute/node/bin/npx --yes skills update agentflow -g -y >> /absolute/path/agentflow-update.log 2>&1
+0 9 * * 1 /absolute/node/bin/npx --yes skills update agflow-frugal -g -y >> /absolute/path/agflow-frugal-update.log 2>&1
 ```
 
 Replace the example paths with your actual Node.js directory and a writable log location before adding the entry with `crontab -e`. For a project installation, have the job enter that project and use `-p` instead of `-g`. Try the command once first, check the log afterward, and open a new assistant session after updates.

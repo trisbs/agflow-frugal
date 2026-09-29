@@ -1,8 +1,8 @@
 {
-  "name": "agentflow",
-  "version": "8.3.3",
-  "description": "A project notebook for Codex and Claude Code, with resumable work, optional planning, and independent review.",
+  "name": "agflow-frugal",
+  "version": "8.4.0",
+  "description": "Agentflow Frugal: a compatibility-first project notebook for Codex and Claude Code with bounded Plus-oriented routing.",
   "author": {
-    "name": "agfnow"
+    "name": "trisbs"
   }
 }

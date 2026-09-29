@@ -9,9 +9,9 @@ const root = path.resolve(__dirname, '../../..')
 const read = relative => fs.readFileSync(path.join(root, relative), 'utf8')
 
 test('the resolved language setting overrides host defaults for Agentflow writing', () => {
-	const skill = read('skills/agentflow/SKILL.md')
-	const english = read('skills/agentflow/docs/AG_GUIDE.md')
-	const chinese = read('skills/agentflow/docs/AG_GUIDE.zh-tw.md')
+	const skill = read('skills/agflow-frugal/SKILL.md')
+	const english = read('skills/agflow-frugal/docs/AG_GUIDE.md')
+	const chinese = read('skills/agflow-frugal/docs/AG_GUIDE.zh-tw.md')
 
 	assert.match(skill, /configuration\.language.*Agentflow writing/i)
 	assert.match(skill, /overrides host\/personal defaults/i)
@@ -23,7 +23,7 @@ test('the resolved language setting overrides host defaults for Agentflow writin
 })
 
 test('delegated workers receive the resolved language as a mandatory brief fact', () => {
-	const delegation = read('skills/agentflow/references/delegation.md')
+	const delegation = read('skills/agflow-frugal/references/delegation.md')
 
 	assert.match(delegation, /output language to the successful startup result's `configuration\.language`/i)
 	assert.match(delegation, /overrides a worker or host default/i)

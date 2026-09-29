@@ -96,7 +96,7 @@ test('check_agf_function detects zsh/bash function', () => {
 test('check_agf_function accepts harmless indentation differences in a managed function', () => {
   const dir = tmp()
   const cfg = path.join(dir, '.zshrc')
-  const script = '$HOME/.claude/skills/agentflow/scripts/agf.js'
+  const script = '$HOME/.claude/skills/agflow-frugal/scripts/agf.js'
   fs.writeFileSync(cfg, `agf() {\n\tlocal dir\n\tdir=$(node "${script}" "$@") || return 1\n\t[ -n "$dir" ] && cd "$dir"\n\treturn 0\n}\n`)
 
   assert.ok(setup.check_agf_function('zsh', cfg, script).ok)
@@ -172,30 +172,30 @@ test('lines_to_append gives fish templates', () => {
 })
 
 test('lines_to_append uses the actual installed skill path and quotes spaces', () => {
-  const skill_dir = '/Users/test user/.codex/skills/agentflow space'
+  const skill_dir = '/Users/test user/.codex/skills/agflow-frugal space'
   const script_path = path.join(skill_dir, 'scripts', 'agf.js')
 
   for (const shell of ['zsh', 'bash', 'fish']) {
     const rendered = setup.lines_to_append(shell, true, false, skill_dir)
     assert.match(rendered, new RegExp(script_path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
-    assert.doesNotMatch(rendered, /\$HOME\/\.claude\/skills\/agentflow\/scripts\/agf\.js/)
+    assert.doesNotMatch(rendered, /\$HOME\/\.claude\/skills\/agflow-frugal\/scripts\/agf\.js/)
   }
 })
 
 test('formal shortcut paths prefer the installed Codex skill and use HOME instead of a machine path', () => {
   const dir = tmp()
   const home = path.join(dir, 'home')
-  const skill = path.join(home, '.codex', 'skills', 'agentflow')
+  const skill = path.join(home, '.codex', 'skills', 'agflow-frugal')
   write_fake_agf(skill)
   fs.writeFileSync(path.join(skill, 'SKILL.md'), 'x')
   const selected = setup.shortcut_paths_for(skill, home)
   assert.deepEqual(selected, {
     host: 'codex',
-    agf: '$HOME/.codex/skills/agentflow/scripts/agf.js',
-    looper: '$HOME/.codex/skills/agentflow/scripts/looper.js',
+    agf: '$HOME/.codex/skills/agflow-frugal/scripts/agf.js',
+    looper: '$HOME/.codex/skills/agflow-frugal/scripts/looper.js',
   })
   const rendered = setup.lines_to_append('zsh', true, false, skill, true, selected)
-  assert.match(rendered, /node "\$HOME\/\.codex\/skills\/agentflow\/scripts\/agf\.js"/)
+  assert.match(rendered, /node "\$HOME\/\.codex\/skills\/agflow-frugal\/scripts\/agf\.js"/)
   assert.doesNotMatch(rendered, new RegExp(skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   drop(dir)
 })
@@ -203,7 +203,7 @@ test('formal shortcut paths prefer the installed Codex skill and use HOME instea
 test('plugin-only shortcut paths use the verified active skill without guessing a cache root', () => {
   const dir = tmp()
   const home = path.join(dir, 'home')
-  const plugin = path.join(home, '.claude', 'plugins', 'cache', 'agentflow release', 'skills', 'agentflow')
+  const plugin = path.join(home, '.claude', 'plugins', 'cache', 'agflow-frugal release', 'skills', 'agflow-frugal')
   fs.mkdirSync(home, { recursive: true })
   write_fake_agf(plugin)
   fs.writeFileSync(path.join(plugin, 'SKILL.md'), 'x')
@@ -219,9 +219,9 @@ test('plugin-only shortcut paths use the verified active skill without guessing 
 test('formal shortcut paths prefer a usable shared agents installation over host aliases', () => {
   const dir = tmp()
   const home = path.join(dir, 'home')
-  const shared = path.join(home, '.agents', 'skills', 'agentflow')
-  const codex = path.join(home, '.codex', 'skills', 'agentflow')
-  const claude = path.join(home, '.claude', 'skills', 'agentflow')
+  const shared = path.join(home, '.agents', 'skills', 'agflow-frugal')
+  const codex = path.join(home, '.codex', 'skills', 'agflow-frugal')
+  const claude = path.join(home, '.claude', 'skills', 'agflow-frugal')
   for (const skill of [shared, codex, claude]) {
     write_fake_agf(skill)
     fs.writeFileSync(path.join(skill, 'SKILL.md'), 'x')
@@ -229,8 +229,8 @@ test('formal shortcut paths prefer a usable shared agents installation over host
 
   assert.deepEqual(setup.shortcut_paths_for(shared, home), {
     host: 'agents',
-    agf: '$HOME/.agents/skills/agentflow/scripts/agf.js',
-    looper: '$HOME/.agents/skills/agentflow/scripts/looper.js',
+    agf: '$HOME/.agents/skills/agflow-frugal/scripts/agf.js',
+    looper: '$HOME/.agents/skills/agflow-frugal/scripts/looper.js',
   })
   drop(dir)
 })
@@ -238,8 +238,8 @@ test('formal shortcut paths prefer a usable shared agents installation over host
 test('formal shortcut paths skip an incomplete agents installation and use a complete direct host installation', () => {
   const dir = tmp()
   const home = path.join(dir, 'home')
-  const shared = path.join(home, '.agents', 'skills', 'agentflow')
-  const claude = path.join(home, '.claude', 'skills', 'agentflow')
+  const shared = path.join(home, '.agents', 'skills', 'agflow-frugal')
+  const claude = path.join(home, '.claude', 'skills', 'agflow-frugal')
   fs.mkdirSync(shared, { recursive: true })
   fs.writeFileSync(path.join(shared, 'SKILL.md'), 'incomplete')
   write_fake_agf(claude)
@@ -247,8 +247,8 @@ test('formal shortcut paths skip an incomplete agents installation and use a com
 
   assert.deepEqual(setup.shortcut_paths_for(shared, home), {
     host: 'claude',
-    agf: '$HOME/.claude/skills/agentflow/scripts/agf.js',
-    looper: '$HOME/.claude/skills/agentflow/scripts/looper.js',
+    agf: '$HOME/.claude/skills/agflow-frugal/scripts/agf.js',
+    looper: '$HOME/.claude/skills/agflow-frugal/scripts/looper.js',
   })
   drop(dir)
 })
@@ -256,16 +256,16 @@ test('formal shortcut paths skip an incomplete agents installation and use a com
 test('main accepts an existing shortcut to any other usable formal installation', () => {
   const dir = tmp()
   const home = path.join(dir, 'home')
-  const shared = path.join(home, '.agents', 'skills', 'agentflow')
-  const codex = path.join(home, '.codex', 'skills', 'agentflow')
-  const claude = path.join(home, '.claude', 'skills', 'agentflow')
+  const shared = path.join(home, '.agents', 'skills', 'agflow-frugal')
+  const codex = path.join(home, '.codex', 'skills', 'agflow-frugal')
+  const claude = path.join(home, '.claude', 'skills', 'agflow-frugal')
   for (const skill of [shared, codex, claude]) {
     write_fake_agf(skill)
     fs.writeFileSync(path.join(skill, 'SKILL.md'), 'x')
   }
   const claude_paths = {
-    agf: '$HOME/.claude/skills/agentflow/scripts/agf.js',
-    looper: '$HOME/.claude/skills/agentflow/scripts/looper.js',
+    agf: '$HOME/.claude/skills/agflow-frugal/scripts/agf.js',
+    looper: '$HOME/.claude/skills/agflow-frugal/scripts/looper.js',
   }
   fs.writeFileSync(path.join(home, '.zshrc'), `${setup.lines_to_append('zsh', true, false, claude, true, claude_paths)}\n`)
 
@@ -282,10 +282,10 @@ test('a managed old-host shortcut is replaced instead of duplicated', () => {
   const content = `# existing\n\nagf() {\n\tlocal dir\n\tdir=$(node "$HOME/.claude/skills/agentflow/scripts/agf.js" "$@") || return 1\n\t[ -n "$dir" ] && cd "$dir"\n\treturn 0\n}\n`
   const result = setup.fixed_content({
     shell: 'zsh', content, needs_fn: true, needs_looper: false, needs_open: false,
-    shortcut_paths: { agf: '$HOME/.codex/skills/agentflow/scripts/agf.js', looper: '$HOME/.codex/skills/agentflow/scripts/looper.js' },
+    shortcut_paths: { agf: '$HOME/.codex/skills/agflow-frugal/scripts/agf.js', looper: '$HOME/.codex/skills/agflow-frugal/scripts/looper.js' },
   })
   assert.equal((result.match(/^agf\(\) \{/gm) || []).length, 1)
-  assert.match(result, /\$HOME\/\.codex\/skills\/agentflow\/scripts\/agf\.js/)
+  assert.match(result, /\$HOME\/\.codex\/skills\/agflow-frugal\/scripts\/agf\.js/)
   assert.doesNotMatch(result, /\.claude\/skills\/agentflow\/scripts\/agf\.js/)
 })
 
@@ -602,7 +602,7 @@ test('generated zsh, bash, and fish shortcuts execute the installed agf.js and l
 test('uninstall preview and decline preserve managed and foreign shell content', () => {
   const dir = tmp()
   const home = path.join(dir, 'home')
-  const skill = path.join(home, '.codex', 'skills', 'agentflow')
+  const skill = path.join(home, '.codex', 'skills', 'agflow-frugal')
   fs.mkdirSync(home, { recursive: true })
   write_fake_agf(skill)
   fs.writeFileSync(path.join(skill, 'SKILL.md'), 'x')
@@ -624,7 +624,7 @@ test('uninstall preview and decline preserve managed and foreign shell content',
 test('uninstall removes only managed shortcuts and exact AGF_OPEN and is idempotent', () => {
   const dir = tmp()
   const home = path.join(dir, 'home')
-  const skill = path.join(home, '.codex', 'skills', 'agentflow')
+  const skill = path.join(home, '.codex', 'skills', 'agflow-frugal')
   fs.mkdirSync(home, { recursive: true })
   write_fake_agf(skill)
   fs.writeFileSync(path.join(skill, 'SKILL.md'), 'x')
@@ -645,14 +645,14 @@ test('uninstall removes only managed shortcuts and exact AGF_OPEN and is idempot
 test('optional skill uninstall moves verified directories and refuses symbolic links', () => {
   const dir = tmp()
   const home = path.join(dir, 'home')
-  const agents = path.join(home, '.agents', 'skills', 'agentflow')
-  const codex = path.join(home, '.codex', 'skills', 'agentflow')
+  const agents = path.join(home, '.agents', 'skills', 'agflow-frugal')
+  const codex = path.join(home, '.codex', 'skills', 'agflow-frugal')
   for (const skill of [agents, codex]) {
     write_fake_agf(skill)
     fs.writeFileSync(path.join(skill, 'SKILL.md'), 'x')
     fs.writeFileSync(path.join(skill, 'scripts', 'setup.js'), 'x')
   }
-  const linked = path.join(home, '.claude', 'skills', 'agentflow')
+  const linked = path.join(home, '.claude', 'skills', 'agflow-frugal')
   fs.mkdirSync(path.dirname(linked), { recursive: true })
   fs.symlinkSync(codex, linked)
 
@@ -668,7 +668,7 @@ test('optional skill uninstall moves verified directories and refuses symbolic l
 test('optional skill uninstall moves every verified formal installation to a recoverable sibling', () => {
   const dir = tmp()
   const home = path.join(dir, 'home')
-  const skills = ['agents', 'codex', 'claude'].map(host => path.join(home, `.${host}`, 'skills', 'agentflow'))
+  const skills = ['agents', 'codex', 'claude'].map(host => path.join(home, `.${host}`, 'skills', 'agflow-frugal'))
   for (const skill of skills) {
     write_fake_agf(skill)
     fs.writeFileSync(path.join(skill, 'SKILL.md'), 'x')

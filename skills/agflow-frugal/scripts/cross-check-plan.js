@@ -7,12 +7,12 @@ const levels = Object.freeze(['narrow', 'targeted', 'full'])
 const controls = Object.freeze(['default', 'stronger', 'skip-review'])
 const documentation_pattern = /(?:^|\/)(?:[^/]+\.(?:md|txt)|LICENSE|CHANGELOG)$/iu
 const workspace_instruction_files = Object.freeze([
-	'skills/agentflow/SKILL.md',
-	'skills/agentflow/references/streams.md',
-	'skills/agentflow/references/ag.md',
-	'skills/agentflow/references/looper.md',
-	'skills/agentflow/docs/AG_GUIDE.md',
-	'skills/agentflow/docs/AG_GUIDE.zh-tw.md',
+	'skills/agflow-frugal/SKILL.md',
+	'skills/agflow-frugal/references/streams.md',
+	'skills/agflow-frugal/references/ag.md',
+	'skills/agflow-frugal/references/looper.md',
+	'skills/agflow-frugal/docs/AG_GUIDE.md',
+	'skills/agflow-frugal/docs/AG_GUIDE.zh-tw.md',
 ])
 
 const invalid = message => ({ valid: false, error: message })

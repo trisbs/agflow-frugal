@@ -1,6 +1,22 @@
 # Changelog
 
-Notable Agentflow changes, with the newest version first. Release metadata uses major.minor.patch; the current release is 8.3.3. Earlier dates identify recorded source milestones, not independently verified public publication dates.
+Notable Agentflow Frugal changes, with the newest version first. Release metadata uses major.minor.patch; the current release is 8.4.0. Agentflow Frugal v8.4.0 is based on upstream Agentflow v8.3.3. Earlier dates identify recorded source milestones, not independently verified public publication dates.
+
+## [8.4.0]
+
+### Added
+
+- An opt-in, compatibility-first Frugal profile for ChatGPT Plus usage. Domain-neutral L0–L5 routing sends bounded verified work directly to Light, keeps meaningful reasoning in one Medium context, and reserves Debate for exceptional material disagreement.
+
+- Deterministic usage budgets, review and Debate gates, and optional version-1 telemetry records. The profile does not make model calls or write state while classifying work.
+
+- A documented measurement model for calls per accepted completion. It distinguishes modeled savings from observed production results.
+
+### Changed
+
+- Existing callers retain upstream cross-check behavior unless they supply optional Plus-specific facts, preserving compatibility.
+
+- Installation instructions now point to `trisbs/agflow-frugal` and identify this project as a fork of upstream Agentflow v8.3.3.
 
 ## [8.3.3]
 

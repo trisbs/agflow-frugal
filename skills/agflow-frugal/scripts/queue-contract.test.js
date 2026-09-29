@@ -19,11 +19,11 @@ const shared_codewalk_record = (overrides = {}) => ({
 	answered_questions: ['Which current paths and boundaries does this request touch?'],
 	shared_coverage: true,
 	discovery_facts: {
-		verified_paths: ['skills/agentflow/scripts/queue-contract.js'],
+		verified_paths: ['skills/agflow-frugal/scripts/queue-contract.js'],
 		fact_inference_labels: ['fact: the queue gate validates stage records'],
 		public_boundaries: ['queue contract validation API'],
 		conventions: ['CommonJS modules'],
-		likely_edit_locations: ['skills/agentflow/scripts/queue-contract.js'],
+		likely_edit_locations: ['skills/agflow-frugal/scripts/queue-contract.js'],
 		focused_commands: ['node --test queue-contract.test.js'],
 		unexamined_areas: ['unrelated integrations'],
 	},

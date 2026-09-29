@@ -16,7 +16,7 @@ test('candidate changelog keeps Unreleased empty and accounts for the 8.3.0 chan
 })
 
 test('the retained regression command names terminal and release boundary tests', () => {
-  const readme = fs.readFileSync(path.join(repo_root, 'skills', 'agentflow', 'scripts', 'README.md'), 'utf8')
-  assert.match(readme, /Run from `skills\/agentflow\/scripts`/)
+  const readme = fs.readFileSync(path.join(repo_root, 'skills', 'agflow-frugal', 'scripts', 'README.md'), 'utf8')
+  assert.match(readme, /Run from `skills\/agflow-frugal\/scripts`/)
   assert.match(readme, /node --test \*\.test\.js/)
 })

@@ -1043,7 +1043,7 @@ const append_reply = ({ root = process.cwd(), notebook: notebook_path, ask, inpu
 
 const parse_args = argv => {
   const command = argv[0];
-  const usage = 'usage: node skills/agentflow/scripts/notebook-write.js <append-input|append-run|append-wip|append-reply|close-round> --notebook <path> [--host <safe-id>] --ask <A-NNN> --input-stdin; append-input needs no --ask; fallback only after --input-stdin fails: --input <draft>';
+  const usage = 'usage: node skills/agflow-frugal/scripts/notebook-write.js <append-input|append-run|append-wip|append-reply|close-round> --notebook <path> [--host <safe-id>] --ask <A-NNN> --input-stdin; append-input needs no --ask; fallback only after --input-stdin fails: --input <draft>';
   if (!['append-run', 'append-wip', 'append-reply', 'append-input', 'close-round'].includes(command)) fail(usage);
   const values = {};
   for (let index = 1; index < argv.length;) {

@@ -128,7 +128,7 @@ const verify_gate = ({ repo, process_status }) => {
 }
 
 const install_shortcut = ({ home, skill_dir }) => {
-  const installed = path.join(home, '.codex', 'skills', 'agentflow')
+  const installed = path.join(home, '.codex', 'skills', 'agflow-frugal')
   fs.mkdirSync(path.dirname(installed), { recursive: true })
   fs.symlinkSync(skill_dir, installed, 'dir')
   const setup = path.join(skill_dir, 'scripts', 'setup.js')

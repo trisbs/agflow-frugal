@@ -745,8 +745,8 @@ const next_run_id = (notebook_text, current_ask) => {
 }
 
 const manual_hook_instructions = host => {
-	const capture = `Automatic prompt/stop hooks are unavailable for ${host}; retain the startup session ID and capture each owner message with node skills/agentflow/scripts/notebook-write.js append-input --notebook <path> --host ${host} --session <id> --input-stdin.`
-	const closeout = `Prepare and validate the bounded closeout manifest, then run node skills/agentflow/scripts/agf.js close --host ${host} --session <id> --manifest-stdin using that same session ID; automatic stop-hook enforcement is unavailable for ${host}.`
+	const capture = `Automatic prompt/stop hooks are unavailable for ${host}; retain the startup session ID and capture each owner message with node skills/agflow-frugal/scripts/notebook-write.js append-input --notebook <path> --host ${host} --session <id> --input-stdin.`
+	const closeout = `Prepare and validate the bounded closeout manifest, then run node skills/agflow-frugal/scripts/agf.js close --host ${host} --session <id> --manifest-stdin using that same session ID; automatic stop-hook enforcement is unavailable for ${host}.`
 	return { capture, closeout, manual_capture: capture, manual_closeout: closeout }
 }
 

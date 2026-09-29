@@ -1,8 +1,8 @@
-# Agentflow v8.3.3
+# Agentflow Frugal v8.4.0
 
 [English](README.md) · **繁體中文**
 
-幫 AI 助理準備一本專案筆記，明天開新的對話，也能接著今天的工作做。
+Agentflow Frugal 是以 upstream Agentflow v8.3.3 為基礎的 fork，加入可選用、優先相容的 ChatGPT Plus Frugal 路由政策。它幫 AI 助理準備一本專案筆記，明天開新的對話，也能接著今天的工作做。
 
 Agentflow 已驗證 **Codex 和 Claude Code** 的整合，也提供 通用核心流程，讓具備檔案、指令和狀態保存能力的其他 host 使用。它會把你的要求、決定、進度和結果保存在容易閱讀的檔案裡。改文件、修程式，或分好幾次完成一個專案，都能用。
 
@@ -19,16 +19,16 @@ Agentflow 已驗證 **Codex 和 Claude Code** 的整合，也提供 通用核心
 在終端機執行以下指令，再選擇助理和安裝範圍：
 
 ```sh
-npx skills add agfnow/agentflow
+npx skills add trisbs/agflow-frugal --skill agflow-frugal
 ```
 
 若要使用 Claude Code 外掛，先在 Claude Code 加入外掛市集：
 
 ```text
-/plugin marketplace add agfnow/agentflow
+/plugin marketplace add trisbs/agflow-frugal
 ```
 
-接著從該市集安裝 `agentflow` 外掛。外掛是否自動更新，依你的 [Claude Code 市集設定](https://code.claude.com/docs/en/discover-plugins#configure-auto-updates)而定。安裝或更新後，請開啟新的助理對話。
+接著從該市集安裝 `agflow-frugal` 外掛。外掛是否自動更新，依你的 [Claude Code 市集設定](https://code.claude.com/docs/en/discover-plugins#configure-auto-updates)而定。安裝或更新後，請開啟新的助理對話。
 
 ## 控場模型怎麼選
 
@@ -39,12 +39,12 @@ npx skills add agfnow/agentflow
 如果透過 `npx skills add` 安裝，建議定期執行：
 
 ```sh
-npx skills update agentflow
+npx skills update agflow-frugal
 ```
 
-目前 [Skills CLI](https://github.com/vercel-labs/skills#skills-update) 是依已安裝的 skill 名稱更新。`agfnow/agentflow` 是安裝來源，因此 `npx skills update agfnow/agentflow` 不是目前依名稱更新的語法。全域安裝可加上 `-g`；專案內安裝則在該專案執行，並加上 `-p`。
+目前 [Skills CLI](https://github.com/vercel-labs/skills#skills-update) 是依已安裝的 skill 名稱更新。`trisbs/agflow-frugal` 是安裝來源，因此 `npx skills update trisbs/agflow-frugal` 不是目前依名稱更新的語法。全域安裝可加上 `-g`；專案內安裝則在該專案執行，並加上 `-p`。
 
-若想自動更新，建議在 macOS 或 Linux 設定每週一次的 **crontab 工作排程**。可以直接請 agent 協助，依你的安裝位置設定。[使用指南](skills/agentflow/docs/AG_GUIDE.zh-tw.md#定期更新-skill)提供週一上午更新的範例，包含完整路徑與執行紀錄。
+若想自動更新，建議在 macOS 或 Linux 設定每週一次的 **crontab 工作排程**。可以直接請 agent 協助，依你的安裝位置設定。[使用指南](skills/agflow-frugal/docs/AG_GUIDE.zh-tw.md#定期更新-skill)提供週一上午更新的範例，包含完整路徑與執行紀錄。
 
 ## 試著交代一件事
 
@@ -66,12 +66,12 @@ godev
 
 ## 接著看
 
-- [日常使用指南](skills/agentflow/docs/AG_GUIDE.zh-tw.md)，最上方保留 YouTube 介紹影片。
+- [日常使用指南](skills/agflow-frugal/docs/AG_GUIDE.zh-tw.md)，最上方保留 YouTube 介紹影片。
 
-- [English user guide](skills/agentflow/docs/AG_GUIDE.md)。
+- [English user guide](skills/agflow-frugal/docs/AG_GUIDE.md)。
 
 - [版本更新紀錄](docs/CHANGELOG.md)，最新版本放在最上方。
 
-- [指令參考](skills/agentflow/scripts/README.md)，供進階設定與問題排除使用。
+- [指令參考](skills/agflow-frugal/scripts/README.md)，供進階設定與問題排除使用。
 
 專案設定保存在 `ag.json`，目前使用設定格式版本 8。輸入 `settings` 即可查看；既有 v7 檔案只在開啟時以保守方式遷移。`allowed-worker` 是 external、internal、host 的無順序權限清單，排列順序不代表執行優先級；`cli-provider` 只篩選 external profile。模型組合放在 `external-workers`，顧問角色設定放在 `pipeline-roles`。

@@ -85,9 +85,9 @@ const formal_installations_for = (skill_dir, home) => {
   if (realpath_or_null(skill_dir) === null) return []
   const installations = []
   for (const host of installation_roots) {
-    const installed = path.join(home, `.${host}`, 'skills', 'agentflow')
+    const installed = path.join(home, `.${host}`, 'skills', 'agflow-frugal')
     if (!fs.existsSync(path.join(installed, 'SKILL.md')) || !fs.existsSync(path.join(installed, 'scripts', 'agf.js')) || !fs.existsSync(path.join(installed, 'scripts', 'looper.js'))) continue
-    const root = `$HOME/.${host}/skills/agentflow/scripts`
+    const root = `$HOME/.${host}/skills/agflow-frugal/scripts`
     installations.push({ host, agf: `${root}/agf.js`, looper: `${root}/looper.js` })
   }
   return installations
@@ -224,7 +224,7 @@ const function_blocks = (shell, content, name) => {
     if (close === null) continue
     const finish = start + close.index + close[0].length
     const text = content.slice(start, finish)
-    blocks.push({ start, finish, text, managed: /\/skills\/agentflow\/scripts\/(?:agf|looper)\.js/u.test(text) })
+    blocks.push({ start, finish, text, managed: /\/skills\/(?:agflow-frugal|agentflow)\/scripts\/(?:agf|looper)\.js/u.test(text) })
   }
   return blocks
 }
@@ -288,7 +288,7 @@ const uninstall_main = (opts = {}) => {
   const unsafe = []
   if (skills) {
     for (const host of installation_roots) {
-      const candidate = path.join(home, `.${host}`, 'skills', 'agentflow')
+      const candidate = path.join(home, `.${host}`, 'skills', 'agflow-frugal')
       let stat
       try { stat = fs.lstatSync(candidate) } catch { continue }
       if (!stat.isDirectory() || stat.isSymbolicLink()) {

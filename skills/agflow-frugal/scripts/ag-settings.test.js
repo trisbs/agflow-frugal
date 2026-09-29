@@ -17,9 +17,9 @@ const all_executables = { executables: ['codex', 'claude'] }
 const git = (repo, args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' })
 const repo_root = path.resolve(__dirname, '../../..')
 const current_public_instruction_files = Object.freeze([
-	'skills/agentflow/SKILL.md',
-	'skills/agentflow/references/ag.md',
-	'skills/agentflow/references/streams.md',
+	'skills/agflow-frugal/SKILL.md',
+	'skills/agflow-frugal/references/ag.md',
+	'skills/agflow-frugal/references/streams.md',
 ])
 
 const canonical_public_syntax = Object.freeze([
@@ -1802,12 +1802,12 @@ test('refresh removes native-host from current settings, display, and public cha
 test('refresh active-guide scan contains only the supported current contract', () => {
 	const repo_root = path.resolve(__dirname, '../../..')
 	const active_guides = [
-			'skills/agentflow/SKILL.md',
-			'skills/agentflow/references/ag.md',
-			'skills/agentflow/references/delegation.md',
-			'skills/agentflow/scripts/README.md',
-			'skills/agentflow/docs/AG_GUIDE.md',
-			'skills/agentflow/docs/AG_GUIDE.zh-tw.md',
+			'skills/agflow-frugal/SKILL.md',
+			'skills/agflow-frugal/references/ag.md',
+			'skills/agflow-frugal/references/delegation.md',
+			'skills/agflow-frugal/scripts/README.md',
+			'skills/agflow-frugal/docs/AG_GUIDE.md',
+			'skills/agflow-frugal/docs/AG_GUIDE.zh-tw.md',
 		]
 	const removed = /schema version 3|schema_version.{0,8}3|version-[123] configuration\b|six worker tiers|all six worker tiers|cli-provider:\s*(?:any|codex|claude)\b|native[_-]host|worker[_-]kind|(?:^|[^A-Za-z0-9_])internal_worker(?:$|[^A-Za-z0-9_])|(?:^|[^A-Za-z0-9_])external_worker(?:$|[^A-Za-z0-9_])|legacy STATUS|runlog:\s*(?:true|false)\b|readable for compatibility|既有檔案仍可讀取|遷移前/u
 	const findings = []

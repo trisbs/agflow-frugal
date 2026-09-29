@@ -80,10 +80,12 @@ const is_project_worktree_command = (command, host, cwd) => {
   const parsed = parse_owned_command(command);
   if (parsed === null || parsed.host !== host) return false;
   const worktrees = `${canonical_path(node_path.resolve(cwd, '.worktrees'))}${node_path.sep}`;
-  const suffix = node_path.join('skills', 'agentflow', 'scripts', 'stop-hook.js');
   const script = canonical_path(parsed.script);
-  return script.startsWith(worktrees)
-    && script.endsWith(`${node_path.sep}${suffix}`)
+  const suffix = ['agflow-frugal', 'agentflow']
+    .map(name => node_path.join('skills', name, 'scripts', 'stop-hook.js'))
+    .find(candidate => script.endsWith(`${node_path.sep}${candidate}`));
+  return suffix !== undefined
+    && script.startsWith(worktrees)
     && script.slice(worktrees.length, -suffix.length - 1).split(node_path.sep).length === 1;
 };
 

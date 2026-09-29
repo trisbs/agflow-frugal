@@ -23,10 +23,10 @@ Agentflow 幫你的 AI 助理準備一本專案筆記。你交代的事情、做
 在終端機輸入以下指令，安裝 skill：
 
 ```sh
-npx skills add agfnow/agentflow
+npx skills add trisbs/agflow-frugal --skill agflow-frugal
 ```
 
-依畫面選擇你使用的 AI 助理，以及只安裝在這個專案，還是供所有專案使用。安裝後開啟新的助理對話，讓它載入 skill。Claude Code 也能透過外掛安裝，方式請看[公開版 README](https://github.com/agfnow/agentflow#install)。
+依畫面選擇你使用的 AI 助理，以及只安裝在這個專案，還是供所有專案使用。安裝後開啟新的助理對話，讓它載入 skill。Claude Code 也能透過外掛安裝，方式請看[公開版 README](https://github.com/trisbs/agflow-frugal#install)。
 
 如果你使用 Codex，Agentflow 維護者依自己的使用經驗，建議選擇 **`gpt-5.6-sol/low` 作為表現最穩定的控場模型**。也就是模型選 `gpt-5.6-sol`，推理程度選 `low`，由它負責和你對話、安排工作。這是本專案的使用建議，仍可依任務與帳號可用的模型調整。[OpenAI 官方模型文件](https://developers.openai.com/api/docs/models/gpt-5.6-sol)也確認這個模型支援 `low` 推理程度。
 
@@ -37,16 +37,16 @@ npx skills add agfnow/agentflow
 如果你是用 `npx skills add` 安裝，建議定期執行：
 
 ```sh
-npx skills update agentflow
+npx skills update agflow-frugal
 ```
 
-目前的 CLI 是依**已安裝的 skill 名稱**更新，所以這裡填 `agentflow`；`agfnow/agentflow` 是 `skills add` 使用的安裝來源。`npx skills update agfnow/agentflow` 這種填入來源的寫法，不是目前依名稱更新的語法。全域安裝可加上 `-g`；專案內安裝則在該專案資料夾執行，並加上 `-p`。詳見 [Skills 更新說明](https://github.com/vercel-labs/skills#skills-update)。
+目前的 CLI 是依**已安裝的 skill 名稱**更新，所以這裡填 `agflow-frugal`；`trisbs/agflow-frugal` 是 `skills add` 使用的安裝來源。`npx skills update trisbs/agflow-frugal` 這種填入來源的寫法，不是目前依名稱更新的語法。全域安裝可加上 `-g`；專案內安裝則在該專案資料夾執行，並加上 `-p`。詳見 [Skills 更新說明](https://github.com/vercel-labs/skills#skills-update)。
 
 想省去每週手動更新的麻煩，可以請助理協助設定 macOS 或 Linux 的 **crontab 工作排程**。以下範例會在每週一上午 9 點更新全域安裝的 Agentflow：
 
 ```cron
 PATH=/absolute/node/bin:/usr/local/bin:/usr/bin:/bin
-0 9 * * 1 /absolute/node/bin/npx --yes skills update agentflow -g -y >> /absolute/path/agentflow-update.log 2>&1
+0 9 * * 1 /absolute/node/bin/npx --yes skills update agflow-frugal -g -y >> /absolute/path/agflow-frugal-update.log 2>&1
 ```
 
 先把範例路徑換成你實際使用的 Node.js 目錄，以及可寫入的紀錄檔位置，再用 `crontab -e` 加入排程。若是專案內安裝，排程要先進入該專案，並把 `-g` 改成 `-p`。設定前先手動試跑一次，之後查看紀錄確認是否成功；更新後請開啟新的助理對話。

@@ -476,7 +476,7 @@ STREAM_INPUT`
 test('agf uninstall crosses a real terminal and keeps optional skill removal recoverable', { skip: !terminal_available }, (t) => {
   const repo = make_repo()
   const home = make_temp_directory('agentflow-terminal-uninstall-home-')
-  const installed = path.join(home, '.codex', 'skills', 'agentflow')
+  const installed = path.join(home, '.codex', 'skills', 'agflow-frugal')
   fs.mkdirSync(path.dirname(installed), { recursive: true })
   fs.cpSync(path.resolve(__dirname, '..'), installed, { recursive: true })
   t.after(() => {
