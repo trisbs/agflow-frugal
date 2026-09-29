@@ -2,7 +2,7 @@
 
 Read this file before selecting, briefing, or dispatching a worker. It is self-contained; no excluded repository guide is required.
 
-Under the Plus profile, delegation is available only for L3: Medium reasoning has produced a frozen plan, substantial bounded mechanical execution remains, and a Light executor can follow it without judgment. The budget permits one worker, depth one, and no parallel workers. The worker cannot delegate. Its minimal brief contains the approved plan, exact files and change, constraints, forbidden scope, and verification; it does not receive the complete planning transcript and cannot redesign or expand scope.
+Under the Plus profile, delegation is available only for L3: Medium reasoning has produced a frozen plan, substantial bounded mechanical execution remains, and a Terra Medium executor can follow it without judgment. The budget permits one worker, depth one, and no parallel workers. The worker cannot delegate. Its minimal brief contains the approved plan, exact files and change, constraints, forbidden scope, and verification; it does not receive the complete planning transcript and cannot redesign or expand scope.
 
 Incident citations explain past failures. An approved redesign may replace their remedy; preserve protection against any hazard that still exists, not obsolete wording.
 

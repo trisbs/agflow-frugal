@@ -343,7 +343,7 @@ test('host templates provide the exact ordered codex and claude profiles', () =>
 				{ id: 'claude-default', command: ['claude', '-p'], priority: 3, family: 'claude' },
 				{ id: 'codex-default', command: ['codex', 'exec'], priority: 3, family: 'codex' },
 			])
-		assert.equal(config['external-workers'][0].tiers.best, host === 'codex' ? 'gpt-6-astra/xhigh' : 'claude-opus-5/high')
+		assert.equal(config['external-workers'][0].tiers.best, host === 'codex' ? 'gpt-5.6-sol/high' : 'claude-opus-5/high')
 	}
 })
 
@@ -351,7 +351,7 @@ test('profile public setting changes use ids and reject removed worker paths', (
 	const config = make_v5_fixture('codex')
 	const changed = settings.apply_changes(config, ['codex-default.best: gpt-5.6-terra/high'], { active_host: 'codex', ...all_executables })
 	assert.equal(changed.config['external-workers'][0].tiers.best, 'gpt-5.6-terra/high')
-	assert.deepEqual(changed.changes, ['codex-default.best: gpt-6-astra/xhigh → gpt-5.6-terra/high'])
+	assert.deepEqual(changed.changes, ['codex-default.best: gpt-5.6-sol/high → gpt-5.6-terra/high'])
 	assert.throws(() => settings.parse_change_lines(['internal-worker.best: gpt-5.6-terra/high']), /unsupported setting change: internal-worker\.best/)
 	assert.throws(() => settings.parse_change_lines(['external-worker.best: claude-opus-5/high']), /unsupported setting change: external-worker\.best/)
 })
@@ -472,13 +472,13 @@ test('host templates are exact, valid, and use the owner-approved defaults', () 
 	const codex = settings.make_template('codex')
 	const claude = settings.make_template('claude')
 
-	assert.equal(codex['external-workers'][0].tiers.best, 'gpt-6-astra/xhigh')
+	assert.equal(codex['external-workers'][0].tiers.best, 'gpt-5.6-sol/high')
 	assert.equal(codex['external-workers'][0].tiers.better, 'gpt-5.6-sol/low')
-	assert.equal(codex['external-workers'][0].tiers.basic, 'gpt-5.6-luna/xhigh')
+	assert.equal(codex['external-workers'][0].tiers.basic, 'gpt-5.6-terra/medium')
 	assert.equal(codex['external-workers'][1].tiers.best, 'claude-opus-5/high')
 	assert.equal(claude['external-workers'][0].tiers.best, 'claude-opus-5/high')
-	assert.equal(claude['external-workers'][1].tiers.best, 'gpt-6-astra/xhigh')
-	assert.equal(claude['external-workers'][1].tiers.basic, 'gpt-5.6-luna/xhigh')
+	assert.equal(claude['external-workers'][1].tiers.best, 'gpt-5.6-sol/high')
+	assert.equal(claude['external-workers'][1].tiers.basic, 'gpt-5.6-terra/medium')
 	assert.deepEqual(settings.validate_config(codex, { active_host: 'codex', ...all_executables }).errors, [])
 	assert.deepEqual(settings.validate_config(claude, { active_host: 'claude', ...all_executables }).errors, [])
 })
@@ -589,7 +589,7 @@ test('public setting paths use kebab-case and address profile ids', () => {
 	assert.equal(changes.config['external-workers'][1].tiers.basic, 'claude-opus-5/high')
 	assert.deepEqual(changes.changes, [
 		'ask-names: on → off',
-		'codex-default.best: gpt-6-astra/xhigh → gpt-5.6-terra/high',
+		'codex-default.best: gpt-5.6-sol/high → gpt-5.6-terra/high',
 		'claude-default.basic: claude-sonnet-5/high → claude-opus-5/high',
 	])
 
@@ -970,7 +970,7 @@ test('settings changes validate the complete batch before one atomic write', () 
 		assert.throws(() => settings.change_configuration(config_path, ['auto-reply: on', 'streams: invalid'], { repo_root: repo, active_host: 'codex', ...all_executables }), /streams/)
 		assert.equal(fs.readFileSync(config_path, 'utf8'), before)
 		const result = settings.change_configuration(config_path, ['auto-reply: on', 'codex-default.best: gpt-5.6-terra/high'], { repo_root: repo, active_host: 'codex', ...all_executables })
-		assert.deepEqual(result.changes, ['auto-reply: off → on', 'codex-default.best: gpt-6-astra/xhigh → gpt-5.6-terra/high'])
+		assert.deepEqual(result.changes, ['auto-reply: off → on', 'codex-default.best: gpt-5.6-sol/high → gpt-5.6-terra/high'])
 	} finally {
 		drop(repo)
 	}

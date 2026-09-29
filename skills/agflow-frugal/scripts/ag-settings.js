@@ -186,9 +186,9 @@ const host_template_values = {
         priority: 3,
         family: 'codex',
         tiers: {
-          best: 'gpt-6-astra/xhigh',
+          best: 'gpt-5.6-sol/high',
           better: 'gpt-5.6-sol/low',
-          basic: 'gpt-5.6-luna/xhigh',
+          basic: 'gpt-5.6-terra/medium',
           cheap: 'gpt-5.6-luna/low',
         },
       },
@@ -246,9 +246,9 @@ const host_template_values = {
         priority: 3,
         family: 'codex',
         tiers: {
-          best: 'gpt-6-astra/xhigh',
+          best: 'gpt-5.6-sol/high',
           better: 'gpt-5.6-sol/low',
-          basic: 'gpt-5.6-luna/xhigh',
+          basic: 'gpt-5.6-terra/medium',
           cheap: 'gpt-5.6-luna/low',
         },
       },

@@ -96,7 +96,7 @@ const route_task = (facts, usage = {}) => {
 	const route = execution_class === 'L0' || execution_class === 'L1'
 		? 'Light Direct'
 		: execution_class === 'L3' && budget.pressure !== 'CONSERVE'
-			? 'Medium → Light'
+			? 'Medium → Terra'
 			: 'Medium Direct'
 	let review = false
 	if ((execution_class === 'L4' || execution_class === 'L5') && facts.material_risk !== undefined) {

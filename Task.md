@@ -30,7 +30,7 @@ Existing Agentflow notebook, ownership, Git, parsing, validation, settings, and 
 - **L0 Mechanical:** Light Direct for specified, bounded work with deterministic verification.
 - **L1 Simple:** Light Direct for an obvious, reversible approach with deterministic verification.
 - **L2 Reasoning:** Medium Direct for meaningful uncertainty, diagnosis, planning, or trade-offs.
-- **L3 Reasoning plus mechanical execution:** Medium freezes the decisions; one Light executor may perform substantial bounded mechanical work.
+- **L3 Reasoning plus mechanical execution:** Medium freezes the decisions; one Terra Medium executor may perform substantial bounded mechanical work.
 - **L4 High Risk:** Medium Direct; at most one independent review when deterministic verification cannot resolve material risk.
 - **L5 Exceptional Deliberation:** L4 plus materially different viable solutions and a substantive reviewer disagreement. This is the only Debate-eligible class.
 
@@ -64,7 +64,7 @@ Reaching a limit is a stop condition. Pressure progresses through `NORMAL → CA
 ## Context policy
 
 - Light Direct receives the request, relevant files, constraints, and verification command.
-- A Light executor receives the approved plan, exact target files and edits, constraints, and verification.
+- A Terra Medium executor receives the approved plan, exact target files and edits, constraints, and verification.
 - A reviewer receives the requirement, decision, relevant diff, deterministic evidence, and unresolved risk.
 - Debate receives only the disputed decision, viable options, constraints, evidence, and reviewer disagreement.
 
@@ -117,7 +117,7 @@ This quantifies the design under explicit assumptions; it is not observed produc
 
 - **Light Direct:** update an explicit configuration value, run its validator, and finish with no worker or review.
 - **Medium Direct:** diagnose a non-obvious local defect, implement the fix in the same reasoning context, and run focused tests.
-- **Medium → Light:** resolve an architectural choice in Medium, freeze a repetitive multi-file edit, and give one Light executor only the plan and verification.
+- **Medium → Terra:** resolve an architectural choice in Medium, freeze a repetitive multi-file edit, and give one Terra Medium executor only the plan and verification.
 - **Review:** use one independent reviewer for a difficult-to-reverse interface change whose remaining risk is not settled by tests.
 - **Debate:** after that reviewer identifies a material disagreement between two consequential viable designs, collect two perspectives and synthesize once.
 

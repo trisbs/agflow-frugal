@@ -16,8 +16,8 @@ test('reasoning and ambiguous tasks use Medium Direct', () => {
 	assert.match(ambiguous.basis, /ambiguous/i)
 })
 
-test('substantial mechanical execution after reasoning permits one Light executor', () => {
-	assert.equal(policy.route_task({ material_uncertainty: true, substantial_mechanical_execution: true }).route, 'Medium → Light')
+test('substantial mechanical execution after reasoning permits one Terra Medium executor', () => {
+	assert.equal(policy.route_task({ material_uncertainty: true, substantial_mechanical_execution: true }).route, 'Medium → Terra')
 })
 
 test('high risk uses Medium and review only when deterministic verification is insufficient', () => {
