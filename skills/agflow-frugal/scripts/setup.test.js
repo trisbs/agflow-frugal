@@ -5,7 +5,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const { execFileSync } = require('node:child_process')
+const { execFileSync, spawnSync } = require('node:child_process')
 
 const setup = require('./setup.js')
 
@@ -97,7 +97,7 @@ test('check_agf_function accepts harmless indentation differences in a managed f
   const dir = tmp()
   const cfg = path.join(dir, '.zshrc')
   const script = '$HOME/.claude/skills/agflow-frugal/scripts/agf.js'
-  fs.writeFileSync(cfg, `agf() {\n\tlocal dir\n\tdir=$(node "${script}" "$@") || return 1\n\t[ -n "$dir" ] && cd "$dir"\n\treturn 0\n}\n`)
+  fs.writeFileSync(cfg, setup.lines_to_append('zsh', true, false, undefined, false, { agf: script }).replace(/^  /gm, '\t'))
 
   assert.ok(setup.check_agf_function('zsh', cfg, script).ok)
   drop(dir)
@@ -596,6 +596,54 @@ test('generated zsh, bash, and fish shortcuts execute the installed agf.js and l
       assert.equal(output.at(-1), target)
       drop(dir)
     }
+  }
+})
+
+test('installed routing shortcuts preserve JSON, diagnostics, exit codes, and cwd', () => {
+  const { exit_code_for } = require('./routing-runner.js')
+  for (const shell of ['zsh', 'bash', 'fish']) {
+    const probe = spawnSync(shell, ['-c', 'exit 0'])
+    if (probe.error?.code === 'ENOENT') continue
+    assert.equal(probe.status, 0)
+    const dir = tmp()
+    try {
+      const home = path.join(dir, 'home')
+      const skill = path.join(home, '.codex', 'skills', 'agflow-frugal')
+      fs.mkdirSync(home, { recursive: true })
+      write_fake_agf(skill)
+      fs.writeFileSync(path.join(skill, 'SKILL.md'), 'x')
+      fs.writeFileSync(path.join(skill, 'scripts', 'agf.js'), [
+        'const fs = require("node:fs")',
+        'if (process.argv[2] !== "route") process.exit(99)',
+        'fs.writeFileSync(process.env.CWD_RESULT, process.cwd())',
+        'process.stdout.write(JSON.stringify({ status: process.argv[3] }) + "\\n")',
+        'process.stderr.write("routing diagnostic\\n")',
+        'process.exitCode = Number(process.argv[4])',
+      ].join('\n'))
+      assert.equal(setup.main({
+        argv: ['--fix', '--quiet'], shell: `/${shell}`, home, skill_dir: skill,
+        marker: path.join(dir, '.marker'), env: {}, ask: () => 'y',
+      }), 0)
+      const config = setup.config_file_for(shell, home)
+      for (const status of [
+        'complete', 'awaiting-routing-facts', 'selection-required',
+        'awaiting-executor', 'awaiting-host', 'unavailable', 'task-failed',
+        'uncertain', 'stopped', 'invalid',
+      ]) {
+        const code = exit_code_for(status)
+        const result = spawnSync(shell, ['-c',
+          'source "$CONFIG_PATH"; agf route "$ROUTE_STATE" "$ROUTE_CODE"',
+        ], {
+          cwd: dir, encoding: 'utf8',
+          env: { ...process.env, HOME: home, CONFIG_PATH: config, ROUTE_STATE: status,
+            ROUTE_CODE: String(code), CWD_RESULT: path.join(dir, 'cwd') },
+        })
+        assert.equal(result.status, code, `${shell}: ${status}`)
+        assert.equal(result.stdout, `${JSON.stringify({ status })}\n`)
+        assert.equal(result.stderr, 'routing diagnostic\n')
+        assert.equal(fs.readFileSync(path.join(dir, 'cwd'), 'utf8'), dir)
+      }
+    } finally { drop(dir) }
   }
 })
 

@@ -170,3 +170,23 @@ test('L5 requires review, two better perspectives, and basic synthesis', () => {
 	facts.records.synthesis = record('synthesis', { role: 'spec' })
 	assert.equal(coordinator.plan_next_action(facts).status, 'complete')
 })
+
+test('usage pressure cannot complete work with an unresolved material-risk review', () => {
+	for (const material_disagreement of [false, true]) {
+		const assessment = { high_consequence: true, material_disagreement, material_risk: true, deterministic_verification_sufficient: false }
+		const facts = base(assessment)
+		facts.usage = { external_workers: 1 }
+		facts.records.assessment = record('assessment', { outputs: { routing_assessment: assessment } })
+		facts.records.primary = record('primary')
+		const result = coordinator.plan_next_action(facts)
+		assert.equal(result.status, 'stopped')
+		assert.equal(result.routing.execution_class, material_disagreement ? 'L5' : 'L4')
+		assert.match(result.requirement, /usage pressure prevents the required material-risk review/)
+		facts.records.review = record('review', { acceptance: { checks_run: true, coordinator_inspected: true, accepted: false } })
+		assert.equal(coordinator.plan_next_action(facts).status, 'unsatisfied')
+		if (!material_disagreement) {
+			facts.records.review = record('review')
+			assert.equal(coordinator.plan_next_action(facts).status, 'complete')
+		}
+	}
+})

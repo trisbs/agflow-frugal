@@ -94,7 +94,9 @@ Classification is domain-neutral and conservative. Explicit metadata may raise a
 
 The deterministic Usage Policy, coordinator, lifecycle, version-1 contracts, frozen brief digests, redacted atomic state, resume identity checks, profile-backed CLI planning, usage budgets, settled-failure handling, and external transport attribution are implemented.
 
-Current status as of 2026-10-06: R1-R7 are implemented and have focused deterministic coverage. The external runner has also passed its 23-test real Git/child-process suite outside the restricted sandbox, and the combined routing suites passed 32 tests after the opt-in live-provider refusal gate was added. R8 is only partially complete: the individual contracts and negative cases exist, but the twelve required journeys have not been assembled into one end-to-end harness, the full unchanged Agentflow suite has not been recorded against this combined change set, and installed-shortcut behavior has not been validated. The routing work is therefore **not production-ready yet**.
+Current status as of 2026-10-06: R1-R7 have focused contract coverage, and R8 remains in progress. All `routing-*.test.js`, `external-runner.test.js`, and `setup.test.js` pass together outside the restricted sandbox: 113 tests, zero failures, zero skips. The wrapper fix, five saved real-process journeys, and pressure-related review guard are implemented. The full twelve-journey harness, actual installed routing CLI journey, full Agentflow regression suite, and live-provider hardening remain incomplete. The routing work is therefore **not production-ready yet**.
+
+The active project `ag.json` uses `cheap: gpt-6-luna/low`, `basic: gpt-6.1-sol/low`, and `better: gpt-6.1-sol/medium`; `best` aliases `better`. Planning roles use Basic and security scan uses Better. This changes project worker settings; template defaults and the interactive main-session model have not been changed.
 
 Native and host execution remain explicit adapter boundaries because this repository cannot fabricate real native handles or host-session controls. The current live-provider file is only a default-deny opt-in gate; it is not yet proof of authenticated cross-provider execution, observed model identity, or cost behavior. No paid provider call belongs in the default test suite.
 
@@ -246,7 +248,7 @@ Tests:
 
 ### Stack R6 — CLI and profile integration
 
-Status: completed for the direct Node CLI contract. `agf route` accepts the documented stdin/task forms, resolves external candidates exclusively from `ag.json`, and returns one structured JSON result with deterministic exit codes. This is verified by focused `agf` and routing-runner tests plus a stdin CLI smoke test. The installed `agf()` shell shortcut remains open in R8.1 because its current directory-changing wrapper has not yet proved that structured JSON output is passed through instead of being used as a `cd` target.
+Status: completed for the direct Node CLI contract. `agf route` accepts the documented stdin/task forms, resolves external candidates exclusively from `ag.json`, and returns structured JSON with deterministic exit codes. Generated wrappers now pass `route` directly to Node; installed shortcut fixtures verify stdout, stderr, exit codes, unchanged routing cwd, and preserved stream directory changes. R8.1 still requires the actual installed routing CLI journey rather than a substitute fixture `agf.js`.
 
 Goal: make the documented `agf route` interface and configured worker profiles authoritative.
 
@@ -302,7 +304,7 @@ Tests:
 
 ### Stack R8 — End-to-end and regression verification
 
-Status: in progress. Completed evidence includes focused negative tests, one real-child independent-clone attribution journey, the `und` locale fallback test, separation of sandbox-only Git failures from genuine failures, and an explicit default-deny live-provider entry point. The twelve consolidated journeys, installed CLI verification, hardened live-provider contract, complete unchanged Agentflow regression suite, and documentation reconciliation remain open.
+Status: in progress. `routing-journey.test.js` contains five passing real-process journeys: Phase 9 items 1, 2, 3, 7, and 8. They use independent no-remote clones, coordinator verification commands, accepted records, and persisted attempts and usage. Resume is not yet exercised by the saved harness. A six-case expansion covering boundary escape, exhausted budgets, stale source/brief resume, stale writers, and secret persistence passed in memory but remains unapplied and awaiting approval. The coordinator now stops when usage pressure suppresses a required material-risk review instead of reporting L4 complete. The twelve required journeys, actual installed CLI verification, live-provider hardening, full Agentflow regression, and documentation reconciliation remain open.
 
 Goal: prove the complete workflow through real process boundaries and close existing regressions.
 
@@ -331,19 +333,23 @@ Complete these items in order; do not mark R8 complete from the existing focused
 
 1. **R8.1 — Installed CLI boundary**
 
-   - Fix the installed `agf()` shell wrapper so commands that return structured JSON, especially `agf route`, are not treated as directory paths for `cd`.
+   - Implemented: zsh/bash and fish wrappers pass `route` through directly and preserve the Node exit status; stream commands retain directory-changing behavior.
 
-   - Add a real shell or PTY journey that invokes the installed shortcut, observes exactly one JSON value on stdout, checks human diagnostics on stderr, and verifies the exit-code map.
+   - Verified: setup fixtures install shortcuts into disposable homes and check one JSON value, stderr diagnostics, exit codes, and routing cwd. All 44 setup tests pass in the combined run.
 
-   - Preserve the current directory-changing behavior for stream commands that intentionally return a directory.
+   - Remaining: invoke the actual installed `agf.js` through the shortcut in a disposable repository, including stdin forms and representative exit states. Run a reusable real PTY journey before terminal-feature closeout; fixture shell tests do not establish current-user installation or PTY behavior.
 
 2. **R8.2 — Deterministic twelve-journey harness**
 
-   - Add one reusable fixture harness using a real Node child through `external-runner-v1`, an independent no-remote Git clone, structured output, coordinator-owned verification, persisted state, and resume.
+   - Keep the existing five-journey foundation. Next, apply the reviewed six-case expansion only after explicit approval; its in-memory result is not saved implementation evidence.
 
-   - Implement all twelve Phase 9 journeys as named tests. L4 must cover both review branches; journey 10 must cover both uncertain and cancelled terminal states.
+   - Complete Phase 9 items 4, 5, 6, 9, 10, 11, and 12. Cover both L4 branches, both L5 outcomes, settled-unavailable fallback, uncertain and cancelled no-relaunch behavior, interrupted resume, and stale identity rejection. Do not count budget-blocked paths as successful full L4/L5 journeys.
 
-   - Assert stage order, selected tier, launch count, persisted attempts, accepted records, usage counters, final status, and absence of repeated accepted work.
+   - Resolve decision P1 below before changing budgets or claiming the complete review/Debate paths pass. Continue independent negative, settlement, and resume work while that decision is pending.
+
+   - Prove interrupted resume through the supported runner/CLI entry point using persisted accepted evidence. Persistence currently drops stage briefs, literal commands, and `launched_candidates`; resume does not reconstruct an external adapter. Define safe rehydration from freshly validated configuration and frozen task inputs before claiming this path works. Never persist unrestricted provider arguments, environment values, or credentials to make resume pass.
+
+   - Assert stage order, tier, observed launches, persisted attempts, records, and counters. Resume must start at the next unaccepted stage without relaunching or charging an accepted stage again.
 
 3. **R8.3 — Persistence and documentation reconciliation**
 
@@ -370,6 +376,33 @@ Complete these items in order; do not mark R8 complete from the existing focused
    - Update the script reference, user-facing guide, and this file to match the observed CLI, persistence, provider, and unsupported native/host behavior.
 
    - Only after all checks pass may the status change to production-ready.
+
+#### Plan controls and open decision
+
+Outcome: complete R8 with reproducible process-boundary evidence and accurate documentation. Scope: the routing harness, defects exposed by its journeys, installed CLI validation, persistence contract, live-provider refusal checks, and final regression evidence. Keep unrelated notebook changes and provider settings intact. Each source change still requires its complete reviewed diff and explicit approval.
+
+Minimality check: extend the current fixture harness and existing adapters rather than add another routing engine. Prefer documenting the actual single-state-file layout unless a separate artifact is needed to satisfy a concrete invariant. No paid provider call is needed for deterministic coverage.
+
+## Invariants
+
+- INV-1: Starting from the five saved journeys, a stage advances only with coordinator-accepted scope, checks, source, and brief evidence. Any rejected attempt that advances is a failure.
+- INV-2: Starting from persisted accepted work, resume observes current identities and continues only at the next unaccepted stage. A stale identity, repeated accepted launch, or duplicate usage charge is a failure.
+- INV-3: Starting from redacted atomic state, persistence keeps secrets out and rejects stale writers. Secret-bearing saved bytes or replacement by a stale revision is a failure.
+- INV-4: Starting from the current budgets, limits and review requirements remain enforced until an explicit policy change is approved. Reporting completion with an outstanding required risk review is a failure.
+
+## Acceptance criteria
+
+- All twelve Phase 9 journeys pass through their required real process and persistence boundaries, including L4 variants and both settlement states; named stage/counter assertions prove INV-1 and INV-2. A blocked branch is recorded as blocked, not counted as a successful complete journey.
+- Boundary escape and assessment writes are rejected; stale source/brief identity prevents dispatch; rejected/cancelled/uncertain work never relaunches automatically. The consolidated harness proves INV-1, INV-2, and INV-4.
+- Saved-byte inspection, interrupted-write checks, and stale-writer tests prove INV-3; documentation names the tested durable layout.
+- The actual installed shortcut preserves structured stdout, stderr, exit codes, and cwd; stream directory changes remain valid. The installed shell and PTY journeys supply the evidence.
+- Every routing and unchanged Agentflow test passes in a Git-child-capable environment, and `git diff --check` passes. Fixture tests, model configuration validation, and live-provider authentication/attribution evidence remain separately identified.
+
+P1 — The current pressure policy conflicts with the required complete L4/L5 journeys. One external candidate reaches `CONSERVE`, disabling review/Debate; one accepted review also reaches `CONSERVE`. Full L5 requires three Better launches, but `expensive_calls` is capped at two. Decide between preserving these limits and explicitly revising the affected completion requirements, or approving a bounded budget/pressure redesign that permits the required paths. Suggested default: preserve current limits until a separate reviewed policy proposal is accepted; this leaves the full-path criteria unresolved.
+
+- ans:
+
+Plan approval does not answer P1, approve the pending source diff, authorize a paid call, or approve a commit. Template model defaults and user-facing model guidance still need reconciliation with the project settings; preserve explicit user preferences when deciding their scope.
 
 #### Manual test plan after local installation
 

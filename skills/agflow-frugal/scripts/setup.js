@@ -48,6 +48,10 @@ const looper_script_for = skill_dir => path.join(path.resolve(skill_dir), 'scrip
 const shell_script_argument = script_path => script_path.startsWith('$HOME/') ? `"${script_path}"` : shell_quote(script_path)
 
 const AGF_FN_ZSH = script_path => `agf() {
+  if [ "$1" = route ]; then
+    node ${shell_script_argument(script_path)} "$@"
+    return $?
+  fi
   local dir
   dir=$(node ${shell_script_argument(script_path)} "$@") || return 1
   [ -n "$dir" ] && cd "$dir"
@@ -55,6 +59,10 @@ const AGF_FN_ZSH = script_path => `agf() {
 }`
 
 const AGF_FN_FISH = script_path => `function agf
+  if test "$argv[1]" = route
+    node ${shell_script_argument(script_path)} $argv
+    return $status
+  end
   set -l dir (node ${shell_script_argument(script_path)} $argv)
   or return 1
   test -n "$dir"; and cd "$dir"

@@ -23,13 +23,13 @@
     "completion-cleanup-interval-days": 7
   },
   "pipeline-roles": {
-    "requirements": "better",
-    "codewalk": "better",
-    "explore": "better",
-    "spike": "better",
-    "spec": "better",
+    "requirements": "basic",
+    "codewalk": "basic",
+    "explore": "basic",
+    "spike": "basic",
+    "spec": "basic",
     "implementation": "basic",
-    "security-scan": "best",
+    "security-scan": "better",
     "acceptance": "better",
     "cross-check": "better",
     "learn": "basic"
@@ -44,10 +44,10 @@
       "priority": 3,
       "family": "codex",
       "tiers": {
-        "best": "gpt-5.6-sol/high",
-        "better": "gpt-5.6-sol/low",
-        "basic": "gpt-5.6-terra/medium",
-        "cheap": "gpt-5.6-luna/low"
+        "best": "gpt-6.1-sol/medium",
+        "better": "gpt-6.1-sol/medium",
+        "basic": "gpt-6.1-sol/low",
+        "cheap": "gpt-6-luna/low"
       }
     },
     {

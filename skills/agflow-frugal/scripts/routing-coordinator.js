@@ -129,6 +129,19 @@ const plan_next_action = facts => {
 	if (primary.missing) return plan_stage(facts, routing, 'primary')
 	if (primary.error) return { status: 'unsatisfied', stage: 'primary', routing, requirement: primary.error }
 
+	if (routing.pressure === 'CONSERVE' &&
+		['L4', 'L5'].includes(routing.execution_class) &&
+		routing_assessment.material_risk === true &&
+		routing_assessment.deterministic_verification_sufficient === false) {
+		const review = require_record(facts, 'review')
+		if (review.missing) return {
+			status: 'stopped',
+			routing,
+			requirement: 'usage pressure prevents the required material-risk review',
+		}
+		if (review.error) return { status: 'unsatisfied', stage: 'review', routing, requirement: review.error }
+	}
+
 	if (routing.execution_class === 'L5' && !routing.review) {
 		return {
 			status: 'awaiting-routing-facts',
