@@ -515,7 +515,8 @@ const validate_execution_record = (record, context = {}) => {
 	for (const field of ['task_id', 'attempt_id', 'candidate_id', 'role']) if (!text_value(record[field])) return `execution record ${field} must be non-empty text`
 	const source_kind = record.source_identity && (record.source_identity.source_kind || record.source_identity.kind)
 	const source_value = record.source_identity && (record.source_identity.value || record.source_identity.commit || record.source_identity.digest)
-	if (!is_object(record.source_identity) || !['git', 'no-git'].includes(source_kind) || !text_value(source_value)) return 'execution record source_identity must identify git or no-git work'
+	if (!is_object(record.source_identity) || !['git', 'no-git', 'unknown'].includes(source_kind) || !text_value(source_value)) return 'execution record source_identity must identify git, no-git, or honest unknown work'
+	if (source_kind === 'unknown' && (record.state === 'completed' || source_value !== 'unknown')) return 'completed execution requires an observed source identity'
 	if (source_kind === 'git' && !/^[0-9a-f]{40}$/u.test(source_value)) return 'execution record git source identity must be exactly 40 lowercase hexadecimal characters'
 	if (source_kind === 'no-git' && !/^[0-9a-f]{64}$/u.test(source_value)) return 'execution record no-git digest must be exactly 64 lowercase hexadecimal characters'
 	if (source_kind === 'no-git' && Object.hasOwn(record.source_identity, 'commit')) return 'no-git source identity must not invent a commit'

@@ -48,6 +48,8 @@ const USAGE_COMMANDS = [
 	{ label: 'setup', syntax: 'agf setup [--fix]', description: 'check or install the shell shortcuts used to run Agentflow' },
 	{ label: 'hooks', syntax: 'agf hooks [--project|--global] [--host <name>] [--off]', description: 'install or remove verified Stop hooks and the project commit guard' },
 	{ label: 'settings', syntax: 'agf settings <show|validate|change|rename> [options]', description: 'inspect or change the current project configuration' },
+	{ label: 'route', syntax: 'agf route <plan|run> --facts-stdin', description: 'plan or execute deterministic tier routing from one JSON facts object on standard input' },
+	{ label: 'route', syntax: 'agf route <resume|inspect> --task <task-id>', description: 'resume or inspect one persisted deterministic routing task' },
 ]
 
 
@@ -2590,7 +2592,43 @@ const close_main = (argv, cwd, log, _ask, _width = 80) => {
 
 // ---------- dispatch ----------
 
-const COMMANDS = { owner: (...args) => require('./notebook-owner.js').cli(...args), compact: (...args) => require('./notebook-compact.js').main(...args), skills: (...args) => require('./skills-audit.js').main(...args), start: start_main, close: close_main, init: init_main, new: new_main, finish: finish_main, cleanup: clean_main, clean: clean_main, merge: clean_main, ditch: ditch_main, uninstall: uninstall_main, setup: setup_main, hooks: hooks_main, settings: settings_main }
+const parse_route_args = argv => {
+	if (!Array.isArray(argv) || argv.length === 0) return { error: 'route requires a command' }
+	const [command, ...rest] = argv
+	if (!['plan', 'run', 'resume', 'inspect'].includes(command)) return { error: 'route command must be plan, run, resume, or inspect' }
+	if (command === 'plan' || command === 'run') {
+		if (rest.length !== 1 || rest[0] !== '--facts-stdin') return { error: `route ${command} requires exactly --facts-stdin` }
+		return { command, facts_stdin: true }
+	}
+	if (rest.length !== 2 || rest[0] !== '--task' || typeof rest[1] !== 'string' || rest[1].trim().length === 0) {
+		return { error: `route ${command} requires exactly --task <task-id>` }
+	}
+	return { command, task_id: rest[1] }
+}
+
+const read_route_facts = read => {
+	const input = String(read())
+	if (input.trim().length === 0) throw new Error('route facts standard input must contain one JSON object')
+	const duplicate = ag_settings.duplicate_json_key(input)
+	if (duplicate !== null) throw new Error(`route facts contain duplicate JSON object key '${duplicate}'`)
+	let facts
+	try { facts = JSON.parse(input) } catch { throw new Error('route facts standard input must contain valid JSON') }
+	if (facts === null || typeof facts !== 'object' || Array.isArray(facts)) throw new Error('route facts standard input must contain one JSON object')
+	return facts
+}
+
+const route_main = (argv, cwd) => {
+	const parsed = parse_route_args(argv)
+	if (parsed.error) return { json: { status: 'invalid', requirement: parsed.error }, exitCode: 5 }
+	let facts
+	if (parsed.facts_stdin) {
+		try { facts = read_route_facts(() => fs.readFileSync(0, 'utf8')) } catch (error) {
+			return { json: { status: 'invalid', requirement: error.message }, exitCode: 5 }
+		}
+	}
+	return require('./routing-runner.js').cli({ ...parsed, ...(facts ? { facts } : {}), cwd }).then(json => ({ json, exitCode: require('./routing-runner.js').exit_code_for(json.status) }))
+}
+const COMMANDS = { owner: (...args) => require('./notebook-owner.js').cli(...args), compact: (...args) => require('./notebook-compact.js').main(...args), skills: (...args) => require('./skills-audit.js').main(...args), start: start_main, close: close_main, init: init_main, new: new_main, finish: finish_main, cleanup: clean_main, clean: clean_main, merge: clean_main, ditch: ditch_main, uninstall: uninstall_main, setup: setup_main, hooks: hooks_main, settings: settings_main, route: route_main }
 
 const main = (argv, cwd, log, ask, width = 80) => {
 	const cmd = COMMANDS[argv[0]]
@@ -2604,20 +2642,24 @@ const main = (argv, cwd, log, ask, width = 80) => {
 
 module.exports = {
 	kebab_case, is_key, next_key, parse_new_args, parse_clean_args, parse_finish_args, resolve_key,
-	parse_start_args, parse_close_args, render_usage, devlog_template, key_from_path, default_from_origin_head,
+	parse_start_args, parse_close_args, parse_route_args, read_route_facts, route_main, render_usage, devlog_template, key_from_path, default_from_origin_head,
 	is_yes, near_keys, stream_doc, host_from_root_status, active_host_for_cli, sanitize_diagnostic, git_timeout_ms, delivery_lock_path, write_all_sync, update_ignore_file, init_main, start_main, close_main, new_main, finish_main, clean_main, ditch_main, uninstall_main, setup_main, hooks_main, settings_main, main,
 }
 
 if (require.main === module) {
+	const emit = r => {
+		if (typeof r === 'number') process.exit(r)
+		if (r.json !== undefined) write_all_sync(process.stdout.fd, `${JSON.stringify(r.json, null, 2)}\n`)
+		else write_all_sync(process.stdout.fd, `${r.dir}\n`)
+		if (r.exitCode !== undefined) process.exitCode = r.exitCode
+	}
 	try {
 		const usage_width = process.stderr.isTTY && Number.isFinite(process.stderr.columns) && process.stderr.columns > 0
 			? process.stderr.columns
 			: 80
 		const r = main(process.argv.slice(2), process.cwd(), (m) => write_all_sync(process.stderr.fd, `${m}\n`), undefined, usage_width)
-		if (typeof r === 'number') process.exit(r)
-		if (r.json !== undefined) write_all_sync(process.stdout.fd, `${JSON.stringify(r.json, null, 2)}\n`)
-		else write_all_sync(process.stdout.fd, `${r.dir}\n`)
-		if (r.exitCode !== undefined) process.exitCode = r.exitCode
+		if (r && typeof r.then === 'function') r.then(emit).catch(err => { write_all_sync(process.stderr.fd, `${err.message}\n`); process.exitCode = 1 })
+		else emit(r)
 	} catch (err) {
 		write_all_sync(process.stderr.fd, `${err.message}\n`)
 		process.exit(1)

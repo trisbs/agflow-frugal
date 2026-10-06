@@ -62,6 +62,34 @@ not a general guarantee that code or a model claim is honest.
 
 - **`delegation-route.js`** — the transport-neutral policy boundary. `select_executor_action(facts)` returns one external-runner, native-tool, host-direct, or unsatisfied action; `next_executor_action(facts, settled_attempt)` advances only after a settled `unavailable` attempt; `validate_execution_record(record, context)` validates common external, internal, and host attempt evidence while retaining legacy external records.
 
+- **`routing-coordinator.js`** — connects deterministic L0–L5 routing to
+  transport-neutral executor selection. It returns one next action at a time,
+  requires accepted execution evidence before review or Debate advances, and
+  never invokes a native or external worker by pretending transports are
+  interchangeable.
+
+- **`routing-lifecycle.js`** — repeatedly requests the coordinator's next
+  action, invokes an explicitly supplied external, internal, or host adapter,
+  validates the returned execution record, and advances only after coordinator
+  acceptance. Missing adapters and failed or unaccepted attempts remain visible
+  terminal states instead of triggering an implicit transport substitution.
+
+- **`routing-contract.js`** — validates version-1 admission, assessment, and
+  review envelopes against frozen task and source identities. Positive routing
+  facts require evidence; prose, confidence, and self-declared levels are not
+  routing inputs.
+
+- **`routing-brief.js`** — freezes stage scope, write authority, tier,
+  verification, output contract, and a digest used to bind attempts to briefs.
+
+- **`routing-execution.js`** — adapts checked external recipes to the
+  independent external runner, validates structured output, and creates only
+  coordinator-owned accepted execution records.
+
+- **`routing-state.js`** and **`routing-runner.js`** — atomically persist
+  resumable routing facts and expose `plan`, `run`, `resume`, and `inspect`.
+  The owner-facing equivalent is `agf route`.
+
 - **`external-runner.js`** — executes one literal command in an independent
   no-remote Git clone and returns bounded output, result-file facts, clone
   changes, and transport facts. Its pre-start Codex check keeps the declared

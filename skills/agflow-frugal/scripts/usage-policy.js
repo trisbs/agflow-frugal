@@ -18,28 +18,96 @@ const LIMITS = Object.freeze({
 
 const invalid = error => ({ valid: false, error })
 const nonnegative_integer = value => Number.isInteger(value) && value >= 0
+const text_array = value => Array.isArray(value) && value.every(item => typeof item === 'string' && item.trim().length > 0)
 
 const classify_task = facts => {
 	if (facts === null || typeof facts !== 'object' || Array.isArray(facts)) return invalid('routing facts must be an object')
-	if (facts.execution_class !== undefined) {
-		if (!EXECUTION_CLASSES.includes(facts.execution_class)) return invalid(`execution_class must be one of: ${EXECUTION_CLASSES.join(', ')}`)
-		return { valid: true, execution_class: facts.execution_class, basis: 'explicit structured metadata' }
-	}
 
-	for (const name of ['mechanical', 'simple', 'material_uncertainty', 'high_consequence', 'difficult_rollback', 'deterministic_verification', 'substantial_mechanical_execution', 'material_disagreement']) {
+	const boolean_fields = [
+		'mechanical',
+		'simple',
+		'requirement_clear',
+		'scope_known',
+		'reversible',
+		'material_uncertainty',
+		'high_consequence',
+		'difficult_rollback',
+		'deterministic_verification',
+		'substantial_mechanical_execution',
+		'material_disagreement',
+	]
+	for (const name of boolean_fields) {
 		if (facts[name] !== undefined && typeof facts[name] !== 'boolean') return invalid(`${name} must be a boolean when present`)
 	}
-
-	if (facts.high_consequence === true || facts.difficult_rollback === true) {
-		return { valid: true, execution_class: facts.material_disagreement === true ? 'L5' : 'L4', basis: 'consequence or reversibility' }
+	for (const name of ['risk_flags', 'missing_information']) {
+		if (facts[name] !== undefined && !text_array(facts[name])) return invalid(`${name} must be an array of non-empty strings when present`)
 	}
-	if (facts.material_uncertainty === true) {
-		return { valid: true, execution_class: facts.substantial_mechanical_execution === true ? 'L3' : 'L2', basis: 'material uncertainty' }
+	if (facts.execution_class !== undefined && !EXECUTION_CLASSES.includes(facts.execution_class)) {
+		return invalid(`execution_class must be one of: ${EXECUTION_CLASSES.join(', ')}`)
 	}
-	if (facts.mechanical === true && facts.deterministic_verification === true) return { valid: true, execution_class: 'L0', basis: 'mechanical with deterministic verification' }
-	if (facts.simple === true && facts.deterministic_verification === true) return { valid: true, execution_class: 'L1', basis: 'simple with deterministic verification' }
 
-	return { valid: true, execution_class: 'L2', basis: 'ambiguous facts use accuracy-preserving Medium Direct fallback' }
+	const risk_flags = facts.risk_flags || []
+	const missing_information = facts.missing_information || []
+	let inferred_class
+	let basis
+
+	if (facts.high_consequence === true || facts.difficult_rollback === true || risk_flags.length > 0) {
+		inferred_class = facts.material_disagreement === true ? 'L5' : 'L4'
+		basis = risk_flags.length > 0 ? 'verified risk flags' : 'consequence or reversibility'
+	} else if (facts.material_uncertainty === true) {
+		inferred_class = facts.substantial_mechanical_execution === true ? 'L3' : 'L2'
+		basis = 'material uncertainty'
+	} else {
+		const light_gate = facts.requirement_clear === true &&
+			facts.scope_known === true &&
+			facts.reversible === true &&
+			facts.deterministic_verification === true &&
+			missing_information.length === 0
+		if (light_gate && facts.mechanical === true) {
+			inferred_class = 'L0'
+			basis = 'mechanical task passed every L0/L1 safety gate'
+		} else if (light_gate && facts.simple === true) {
+			inferred_class = 'L1'
+			basis = 'simple task passed every L0/L1 safety gate'
+		} else {
+			inferred_class = 'L2'
+			basis = missing_information.length > 0
+				? 'missing information requires basic reasoning'
+				: 'unproven L0/L1 safety conditions require basic reasoning'
+		}
+	}
+
+	if (facts.execution_class === undefined) return { valid: true, execution_class: inferred_class, basis }
+	const explicit_index = EXECUTION_CLASSES.indexOf(facts.execution_class)
+	const inferred_index = EXECUTION_CLASSES.indexOf(inferred_class)
+	if (explicit_index >= inferred_index) {
+		return { valid: true, execution_class: facts.execution_class, basis: 'explicit structured metadata raised or preserved the inferred class' }
+	}
+	return { valid: true, execution_class: inferred_class, basis: `explicit ${facts.execution_class} was raised by verified routing facts` }
+}
+
+const admit_cheap = facts => {
+	const classification = classify_task(facts)
+	if (!classification.valid) return classification
+	if (classification.execution_class === 'L0' || classification.execution_class === 'L1') {
+		return { valid: true, admitted: true, execution_class: classification.execution_class, basis: classification.basis }
+	}
+	return {
+		valid: true,
+		admitted: false,
+		execution_class: 'ESCALATE',
+		floor_class: classification.execution_class,
+		basis: classification.basis,
+	}
+}
+
+const classify_escalated_task = facts => {
+	const classification = classify_task(facts)
+	if (!classification.valid) return classification
+	if (classification.execution_class === 'L0' || classification.execution_class === 'L1') {
+		return { valid: true, execution_class: 'L2', basis: 'cheap escalation establishes an L2 minimum' }
+	}
+	return classification
 }
 
 const budget_state = usage => {
@@ -93,11 +161,13 @@ const route_task = (facts, usage = {}) => {
 	if (budget.pressure === 'STOP') return { valid: true, ...classification, ...budget, route: 'STOP', review: false, debate: false }
 
 	const execution_class = classification.execution_class
-	const route = execution_class === 'L0' || execution_class === 'L1'
-		? 'Light Direct'
-		: execution_class === 'L3' && budget.pressure !== 'CONSERVE'
-			? 'Medium → Terra'
-			: 'Medium Direct'
+	const cheap_direct = execution_class === 'L0' || execution_class === 'L1'
+	const route = cheap_direct
+		? 'Cheap Direct'
+		: execution_class === 'L5'
+			? 'Basic Coordinator'
+			: 'Basic Direct'
+	const primary_tier = cheap_direct ? 'cheap' : 'basic'
 	let review = false
 	if ((execution_class === 'L4' || execution_class === 'L5') && facts.material_risk !== undefined) {
 		const gate = review_gate(facts)
@@ -112,7 +182,17 @@ const route_task = (facts, usage = {}) => {
 		debate = gate.allowed && review && budget.pressure === 'NORMAL'
 		deliberation_score = gate.score
 	}
-	return { valid: true, ...classification, pressure: budget.pressure, route, review, debate, ...(deliberation_score === undefined ? {} : { deliberation_score }) }
+	return {
+		valid: true,
+		...classification,
+		pressure: budget.pressure,
+		route,
+		primary_tier,
+		secondary_tier: review || debate ? 'better' : null,
+		review,
+		debate,
+		...(deliberation_score === undefined ? {} : { deliberation_score }),
+	}
 }
 
 const create_telemetry_record = facts => {
@@ -144,4 +224,4 @@ const create_telemetry_record = facts => {
 	} }
 }
 
-module.exports = { EXECUTION_CLASSES, PRESSURE_STATES, LIMITS, classify_task, budget_state, review_gate, debate_gate, route_task, create_telemetry_record }
+module.exports = { EXECUTION_CLASSES, PRESSURE_STATES, LIMITS, classify_task, admit_cheap, classify_escalated_task, budget_state, review_gate, debate_gate, route_task, create_telemetry_record }

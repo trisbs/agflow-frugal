@@ -306,6 +306,7 @@ const run_child = ({ command, cwd, timeout_ms, stall_timeout_ms, nested_poll_ms,
     })
   } catch (error) {
     resolve({
+      pid: child?.pid ?? null,
       launch_error: error,
       close: { exit_code: null, signal: null },
       stdout: stdout_capture.finish(),
@@ -382,6 +383,7 @@ const run_child = ({ command, cwd, timeout_ms, stall_timeout_ms, nested_poll_ms,
     observe()
     const elapsed_ms = Date.now() - started_at
     resolve({
+      pid: child.pid,
       launch_error,
       close: close_result,
       stdout: stdout_capture.finish(),
@@ -574,6 +576,7 @@ const make_result = async (options, clone, command, before_snapshot, child_resul
     exit_code: child_result.close.exit_code,
     signal: child_result.close.signal,
     process: {
+      pid: child_result.pid,
       exit_code: child_result.close.exit_code,
       signal: child_result.close.signal,
       error: child_result.launch_error ? child_result.launch_error.message : null,
@@ -595,6 +598,7 @@ const make_result = async (options, clone, command, before_snapshot, child_resul
     result_file: declared_result_file,
     clone: {
       root: clone.root,
+      head: after_snapshot.head || null,
       created: clone.created,
       independent: clone.independent,
       remotes: clone.remotes,

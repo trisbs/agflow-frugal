@@ -12,7 +12,7 @@ Read `references/delegation.md` before selecting or dispatching a worker; it own
 
 Read and validate adjacent `ag.json`, STATUS, the latest unfinished Ask, Git state, and exact current artifacts before choosing work. Record one route: `direct`, `selected_advisors`, `full_pipeline`, or `blocked`, naming operation, `allow-ag`, material risks, named questions, owner confirmation, and plain-language reason. `$target_doc` is the owner conversation and live recovery surface; STATUS is recovery projection, not settings storage.
 
-- `direct`: the normal L0–L2 route and the preferred route whenever a handoff is unlikely to reduce total cost. L0/L1 use Light Direct; L2 uses Medium Direct. L3 may use one Terra Medium executor only after Medium freezes a bounded plan and substantial mechanical work remains. Honor explicit executor choices, no-delegation, and fast-lane; execution choice does not waive applicable checks or approvals.
+- `direct`: L0/L1 use the configured Cheap tier and L2/L3 use the configured Basic tier. L4 uses Basic Direct with an optional Better review, and L5 uses Basic Coordinator with Better workers only after the Debate hard gate passes. Tier names are provider-independent. The main session launches workers; workers do not recursively delegate. Honor explicit executor choices, no-delegation, and fast-lane; execution choice does not waive applicable checks or approvals.
 
 - `selected_advisors`: each named advisor answers an important question that direct work cannot settle; naming a stage without stating its question is insufficient.
 - `full_pipeline`: an enabled exact trigger or L4/L5 work whose unresolved risk cannot be handled by direct reasoning and deterministic verification. Risk alone does not require every pipeline stage.
