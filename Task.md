@@ -20,7 +20,7 @@ The escalation rule is:
 
 ## P0 — Resolve nested Git subprocess `EPERM` before release — fixed for reproduced case
 
-**Status: implementation fixed for the reproduced failure; release remains gated on the complete suite.** The immediate cause was an empty read-only `/tmp/.git` sentinel exposed by this Codex environment. `repository-state.js` treated every ancestor `.git` directory as repository metadata, so plain-folder checks unnecessarily invoked Git; deeper test/PTY process trees then produced `EPERM`. It now ignores only empty `.git` directories above the requested project root. An empty `.git` at the requested root, non-empty/broken repository metadata, and environment overrides still fail closed. Minimal reproduction: a plain directory below an empty ancestor `.git` previously returned `state: error`; after the change it returns `state: plain` without invoking Git. The focused regression and affected closeout/hook/PTY suites pass. A complete suite run is still needed after resolving its separate non-EPERM failures; do not release or mark R8 complete until all acceptance checks pass.
+**Status: the reproduced nested-Git failure is fixed and R8 regression checks pass; release still requires Phase 10 authorization and delivery checks.** The immediate cause was an empty read-only `/tmp/.git` sentinel exposed by this Codex environment. `repository-state.js` treated every ancestor `.git` directory as repository metadata, so plain-folder checks unnecessarily invoked Git; deeper test/PTY process trees then produced `EPERM`. It now ignores only empty `.git` directories above the requested project root. An empty `.git` at the requested root, non-empty/broken repository metadata, and environment overrides still fail closed. Minimal reproduction: a plain directory below an empty ancestor `.git` previously returned `state: error`; after the change it returns `state: plain` without invoking Git. The focused regression, affected closeout/hook/PTY suites, and complete Agentflow script suite pass outside the restricted process sandbox. Do not publish or release without the separate Phase 10 request.
 
 ### Upstream comparison: original Agentflow
 
@@ -397,7 +397,7 @@ Minimality check: extend the current fixture harness and existing adapters rathe
 
 #### Release readiness decision — 2026-10-07
 
-- Decision: **R8 is complete; do not publish or release in this task.** The full suite, installed shortcut/PTY journey, and final diff review passed. A later Phase 10 release still needs the versioned commit and delivery checks, and must be separately requested; no commit, push, or release was made here.
+- Decision: **R8 is complete; do not publish or release in this task.** The full suite, installed shortcut/PTY journey, and final diff review passed. Local development commit `c43d7d5` records the R8 implementation; no release-version change, push, or publication was made. Phase 10 delivery checks still require a separate release request.
 
 - Conditional stability: deterministic R8 acceptance and the installed boundary checks now pass, so the candidate is ready for Phase 10 review when authorized. Paid live-provider behavior is explicitly unverified and remains outside production-readiness claims.
 
@@ -411,7 +411,7 @@ Minimality check: extend the current fixture harness and existing adapters rathe
 
 1. **Phase 10 release preparation.** Only after an explicit release request, verify the release version and exact staged files, create the versioned commit, and run delivery checks; do not push or publish without separate authorization.
 
-2. Reconcile final R8 status and documentation, complete host review and minimality checks, then proceed to Phase 10 release preparation only after installed evidence and every acceptance check pass.
+2. Keep the release note and persistent no-auto-update preference intact; no further R8 implementation work remains unless new evidence reopens an acceptance item.
 
 3. After release, implement token-efficient prompt-enabled run tracing. A request such as `godev trace` should set only a local per-run flag, collect compact structured events, emit one short line on stage transitions/errors, and expose details through a bounded terminal view. Derive data from existing state without another model call or prompt replay; keep it temporary by default and redact prompts, credentials, environment values, and raw provider arguments. Default to `summary`; support `full` only when explicitly requested.
 

@@ -317,3 +317,9 @@ Task.md now records the 128-test result and completed R8.3 evidence. R8 remains 
 - Invoked installed `agf.js` through ephemeral zsh `agf` wrappers from a disposable `/tmp` directory. Stdin and task forms emitted structured invalid JSON with exit 5 due to deliberately invalid fixture `ag.json`; successful routing and the configured current-user shortcut/PTY journey remain unverified.
 
 - Re-ran the complete script suite, but it produced no further output for about 25 seconds and was interrupted (exit 130); this is not a passing check. `git diff --check` passed. Prior complete-suite green evidence is recorded in RUN-026, but the current rerun hang and outstanding R8.1 environment evidence keep R8 and release open. No provider, commit, or release.
+
+## [RUN-028] Event — 2026-10-07 19:07:37 +0800 (A-001)
+
+- R8 acceptance completed: the full Agentflow script suite passed outside the restricted process sandbox (exit 0); the ownership test file passed 20 with 3 case-sensitive-filesystem skips. The prior sandbox hang was reproduced as nested-process EPERM/timeouts, not a surviving background terminal.
+- Installed Agentflow is synchronized to the candidate with old changed files backed up in `/tmp/agflow-frugal-installed-backup-20261007`. A disposable setup-generated zsh shortcut passed `setup.js --quiet` (exit 0); an Expect PTY exercised stdin, structured output, and the expected fail-closed exit 5 in a valid no-Git fixture because no checked executor recipe was available.
+- Final diff review and `git diff --check` passed. Local development commit `c43d7d5` records the implementation; Task.md is being reconciled with that result. No version bump, provider call, push, or release.
