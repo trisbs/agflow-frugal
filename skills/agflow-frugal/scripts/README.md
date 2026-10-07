@@ -86,9 +86,33 @@ not a general guarantee that code or a model claim is honest.
   independent external runner, validates structured output, and creates only
   coordinator-owned accepted execution records.
 
+- **`provider-adapters.js`** — validates version-1 Codex and Claude recipes
+  against the configured cheap tier, builds provider-specific model/effort
+  arguments, and extracts final output plus provider-emitted identity when
+  available. It reports unobserved identity as `unknown`.
+
 - **`routing-state.js`** and **`routing-runner.js`** — atomically persist
   resumable routing facts and expose `plan`, `run`, `resume`, and `inspect`.
-  The owner-facing equivalent is `agf route`.
+  The owner-facing CLI is `agf route plan|run|resume|inspect`; it emits one
+  structured JSON result on stdout and diagnostics on stderr. Resume reloads
+  and validates current configuration and source identity, then continues at
+  the next unaccepted stage without charging or launching accepted work again.
+  `<workspace>/routing/<task-id>/state.json` is the only durable routing
+  record; it contains allowlisted, redacted state, while adapters, provider
+  recipes, command arguments, and environment values must be supplied again at
+  resume time. External execution uses an independent clone without remotes.
+  Owner cancellation is verified only for termination of the local process
+  group; cancellation of a remote provider-side job is not established.
+
+- **`routing-live-provider.js`** — default-deny, explicit `--run` gate for an
+  injected live-provider runner. It requires a version-1 checked recipe keyed
+  to a configured provider family and exact cheap-tier model/effort, confirms
+  the initial plan selects that tier, and prints an authentication/cost warning
+  before launch. The adapter explicitly passes provider-specific model and
+  effort controls. It accepts actual attribution only from provider output;
+  missing model or effort stays `unknown`. Codex's JSONL output does not expose
+  those identity fields through this adapter, and no paid live call belongs in
+  the default suite.
 
 - **`external-runner.js`** — executes one literal command in an independent
   no-remote Git clone and returns bounded output, result-file facts, clone

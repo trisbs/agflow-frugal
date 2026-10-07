@@ -172,17 +172,17 @@ for (const state of ['task-failed', 'cancelled', 'uncertain']) {
 test('lifecycle stops before a launch that would exceed a budget', async () => {
 	let launches = 0
 	const facts = base()
-	facts.usage = { external_workers: 1 }
+	facts.usage = { external_workers: 2 }
 	const result = await lifecycle.run_lifecycle(facts, {
 		external: async () => { launches += 1 },
 	})
 	assert.equal(result.status, 'stopped')
-	assert.match(result.requirement, /external_workers budget/)
+	assert.match(result.requirement, /external_workers budget would exceed/)
 	assert.equal(launches, 0)
 
 	assert.deepEqual(
-		lifecycle.would_exceed_budget({ expensive_calls: 2 }, { expensive_calls: 1 }),
-		['expensive_calls', 3],
+		lifecycle.would_exceed_budget({ expensive_calls: 4 }, { expensive_calls: 1 }),
+		['expensive_calls', 5],
 	)
 })
 

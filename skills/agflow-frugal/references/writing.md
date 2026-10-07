@@ -44,7 +44,11 @@
 
 ## Document-specific formats
 
-- `show-diff`: follow SKILL.md's reasoned unified-diff format; standalone-report opening and supporting-section rules don't apply to the diff.
+- `show-diff` requests only filename headings and, for each logical change, a concise `Reason:` followed by an exact fenced `diff` hunk. Use standard unified-diff markers and verified old/new line numbers; include only enough context to locate the change. Insertions contain only added lines; deletions only removed lines. Describe binary changes without invented text. Omit summaries, introductions, inspection notes, examples, verification sections and closing commentary. Show snapshot identities only when needed to distinguish baselines. Preserve owner changes using verified pre-edit text; for edits already made, use a verified snapshot or commit. If unavailable, say so instead of guessing or treating HEAD as the original. Put reasoned hunks in the devlog Reply or a linked file; required devlog records stay outside the diff. `show-diff` does not authorize edits or change persistent settings.
+
+- When providing replacement or insertion text, state the target path and current line numbers, quote the exact text or insertion anchor, and verify it against the saved file. If unavailable, say so instead of inventing locations.
+
+- Standalone-report opening rules do not apply to `show-diff`.
 
 - Agentflow devlogs: follow `references/closeout.md` for exact Reply structure and apply this style within Ask/RUN/WIP/Reply. A `[FINAL REPORT]` section is a devlog answer, not a standalone report.
 

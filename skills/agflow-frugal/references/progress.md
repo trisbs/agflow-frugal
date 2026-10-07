@@ -1,5 +1,13 @@
 # Progress records
 
+## Notebook compaction and history
+
+- Startup and input capture automatically compact eligible completed rounds when a notebook exceeds 1,000 lines or reaches 768 KiB. After the first meaningful response, check its size; before closeout, run `node <active-agentflow-skill-dir>/scripts/agf.js compact --notebook <target-doc>` with the current host/session if compaction is still needed. This also recovers notebooks over the former 1 MiB limit.
+
+- Compaction verifies each physical Ask span by identifier, byte length and SHA-256 in the adjacent archive before removing the same live bytes. It preserves the current round and conservatively retains rounds with nonempty inline answers; the unselected suffix stays live and authoritative. Perform the answer-recovery gate before handling retained rounds separately. Stop on collisions, source replacement or uncertain boundaries. A large open round remains readable and writable; never truncate or archive it to satisfy a threshold. Individual input and draft limits still apply.
+
+- The notebook and adjacent archive are the single authoritative conversation history. Completed Ask/RUN/WIP/Reply spans and archived bytes are immutable and append-only; do not rewrite, summarize in place, or reformat them without explicit owner permission. STATUS and live recovery records are mutable projections. Verified byte-preserving compaction may move history but does not permit editing it.
+
 - Keep a central tracker for decomposed work. Use `tracker-contract.js template` at `<work-root>/tracker.md`. Each task states outcome, exact paths and work boundary, needed contract decisions, proof command or inspection, failure handling, and `Source:`. Keep implementation decisions inside the task so a new implementer need not reconstruct the conversation; link lengthy inputs and raw evidence. Apply this to new or open tasks, preserving completed records. After material updates run `tracker-contract.js validate --refresh --repo <repo> --tracker <path>`; it derives totals without marking tasks complete. Link the tracker from the devlog. — I-063.
 
 - A completed tracker records its evidence commit in Git projects; in a confirmed plain folder use `Evidence commit: not applicable` (`not applicable; plain folder` also remains valid). File/test proof and all other completion checks still apply. The CLI checks format, not evidence truth. An unborn Git repository is not a plain folder; commit the evidence before marking its tracker complete.

@@ -146,12 +146,15 @@ test('L5 requires review, two better perspectives, and basic synthesis', () => {
 		high_consequence: true,
 		material_disagreement: true,
 	})
+	facts.usage = { external_workers: 1, discovery_iterations: 1 }
 	facts.records.assessment = record('assessment', {
 		outputs: { routing_assessment: { high_consequence: true, material_disagreement: true, material_risk: true, deterministic_verification_sufficient: false } },
 	})
 	facts.records.primary = record('primary')
 	assert.equal(coordinator.plan_next_action(facts).stage, 'review')
 	facts.records.review = record('review')
+	facts.usage.independent_reviewers = 1
+	facts.usage.expensive_calls = 1
 	facts.review_facts = {
 		D: 2, T: 2, I: 2, E: 1, R: 1,
 		viable_alternatives: true,
@@ -162,8 +165,12 @@ test('L5 requires review, two better perspectives, and basic synthesis', () => {
 	}
 	assert.equal(coordinator.plan_next_action(facts).stage, 'debate-a')
 	facts.records['debate-a'] = record('debate-a')
+	facts.usage.debate_perspectives = 1
+	facts.usage.expensive_calls = 2
 	assert.equal(coordinator.plan_next_action(facts).stage, 'debate-b')
 	facts.records['debate-b'] = record('debate-b')
+	facts.usage.debate_perspectives = 2
+	facts.usage.expensive_calls = 3
 	const synthesis = coordinator.plan_next_action(facts)
 	assert.equal(synthesis.stage, 'synthesis')
 	assert.equal(synthesis.tier, 'basic')
@@ -175,7 +182,7 @@ test('usage pressure cannot complete work with an unresolved material-risk revie
 	for (const material_disagreement of [false, true]) {
 		const assessment = { high_consequence: true, material_disagreement, material_risk: true, deterministic_verification_sufficient: false }
 		const facts = base(assessment)
-		facts.usage = { external_workers: 1 }
+		facts.usage = { expensive_calls: 4 }
 		facts.records.assessment = record('assessment', { outputs: { routing_assessment: assessment } })
 		facts.records.primary = record('primary')
 		const result = coordinator.plan_next_action(facts)

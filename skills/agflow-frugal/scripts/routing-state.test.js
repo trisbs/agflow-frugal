@@ -34,6 +34,26 @@ test('routing state rejects stale revisions and retains the prior digest chain',
 	assert.equal(second.prior_digest, first.digest)
 })
 
+test('routing state preserves the last valid revision when replacement is interrupted', () => {
+	const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'routing-state-interrupted-'))
+	const first = state.save(workspace, 'task-1', { task: { task_id: 'task-1' }, records: {} })
+	const rename = fs.renameSync
+	fs.renameSync = () => { throw new Error('simulated interruption before atomic replacement') }
+	try {
+		assert.throws(
+			() => state.save(workspace, 'task-1', { task: { task_id: 'task-1' }, records: { primary: {} } }, { expected_revision: first.revision }),
+			/simulated interruption/,
+		)
+	} finally {
+		fs.renameSync = rename
+	}
+	const loaded = state.load(workspace, 'task-1')
+	assert.equal(loaded.revision, first.revision)
+	assert.equal(loaded.digest, first.digest)
+	assert.deepEqual(loaded.state.records, {})
+	assert.deepEqual(fs.readdirSync(path.dirname(first.path)), ['state.json'])
+})
+
 test('routing state rejects symbolic-link traversal', t => {
 	const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'routing-state-link-'))
 	const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'routing-state-outside-'))
@@ -61,6 +81,10 @@ test('routing state persists only redacted allowlisted fields', () => {
 			prompt: 'private task prompt',
 			work_boundary: ['src/a.js'],
 		},
+		briefs: {
+			primary: { goal: 'safe stage goal', prompt: 'private brief prompt', command: ['private-command'] },
+		},
+		launched_candidates: ['fixture-profile'],
 		config: {
 			switches: { 'allowed-worker': ['external'] },
 			token: 'private-token',
@@ -80,13 +104,17 @@ test('routing state persists only redacted allowlisted fields', () => {
 	const serialized = fs.readFileSync(saved.path, 'utf8')
 	for (const forbidden of [
 		'private task prompt',
+		'private brief prompt',
 		'private-token',
 		'--secret',
+		'private-command',
 		'private-environment-value',
 		'private provider argument',
 		'must not persist',
 	]) assert.equal(serialized.includes(forbidden), false)
 	const loaded = state.load(workspace, 'task-1')
 	assert.deepEqual(loaded.state.task.work_boundary, ['src/a.js'])
+	assert.deepEqual(loaded.state.briefs, { primary: { goal: 'safe stage goal' } })
+	assert.deepEqual(loaded.state.launched_candidates, ['fixture-profile'])
 	assert.equal(Object.hasOwn(loaded.state, 'external_execution'), false)
 })

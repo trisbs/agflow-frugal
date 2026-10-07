@@ -64,7 +64,7 @@ test('main prints usage on a missing or unknown subcommand', () => {
 })
 
 test('main accepts clean as an alias of cleanup', () => {
-	const { dir } = make_repo()
+	const { dir } = make_repo({ prefix: 'agf clean - ' })
 	const wt = open_stream(dir, 'login page')
 	const r = agf.main(['clean', 'login-page'], dir, () => {})
 	assert.equal(r.dir, dir)

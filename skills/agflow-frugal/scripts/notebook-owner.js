@@ -209,7 +209,12 @@ const guard = ({ root = process.cwd(), notebook, text, host, session, ask, works
   const target = ask || current.id;
   const closed_target = allow_closed && parsed.some(round => round.id === target && round.reply_text.trim());
   if (record && record.ask === target && (record.state === 'active' || closed_target)) {
-    if (record.host !== who.host || record.session !== who.session) fail(`${notebook} ${record.ask} belongs to ${record.host} session ${record.session}; ${recovery(info, current, record, text)}`);
+    if (record.host !== who.host || record.session !== who.session) {
+      const mismatches = [];
+      if (record.host !== who.host) mismatches.push(`host ID mismatch (owner ${record.host}, writer ${who.host})`);
+      mismatches.push(record.session === who.session ? 'session ID matches' : 'session ID mismatch');
+      fail(`${notebook} ${record.ask} belongs to ${record.host} session ${record.session}; writer refused because ${mismatches.join('; ')}; ${recovery(info, current, record, text)}`);
+    }
     if (target !== current.id && !closed_target) fail('requested Ask is no longer the current round');
     return { ...info, record, identity: who };
   }

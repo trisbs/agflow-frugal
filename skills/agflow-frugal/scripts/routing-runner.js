@@ -9,6 +9,7 @@ const execution = require('./routing-execution.js')
 const state = require('./routing-state.js')
 const resume = require('./routing-resume.js')
 const ag_settings = require('./ag-settings.js')
+const provider_adapters = require('./provider-adapters.js')
 
 const read_json = file => JSON.parse(fs.readFileSync(path.resolve(file), 'utf8'))
 const workspace_for = facts => facts.workspace_dir || '.agentflow'
@@ -65,15 +66,39 @@ const exit_code_for = status => ({
 const adapters_for = facts => {
 	if (!facts.external_execution) return {}
 	const configured = facts.external_execution
+	const profiles = facts.config?.['external-workers'] || []
+	const live_recipe_for = context => {
+		const profile = profiles.find(candidate => candidate.id === context.selection.candidate_id)
+		const recipe = facts.provider_recipes?.[context.selection.candidate_id]
+		return recipe?.validation === 'live-provider' ? { profile, recipe } : null
+	}
 	return { external: execution.external_adapter({
 		source_directory: configured.source_directory,
 		runner_options: configured.runner_options || {},
-		arguments_for_stage: context => configured.arguments_by_stage?.[context.stage],
+		arguments_for_stage: (context, brief) => {
+			const live = live_recipe_for(context)
+			if (live) return provider_adapters.build_invocation({ profile: live.profile, recipe: live.recipe, context, brief }).arguments
+			return configured.arguments_by_stage?.[context.stage]
+		},
+		result_format_for_stage: context => live_recipe_for(context) ? 'text' : 'json',
+		parse_output: ({ context, runner }) => {
+			const live = live_recipe_for(context)
+			return live ? provider_adapters.parse_output(live.profile.family, runner.stdout) : { value: runner.result.value }
+		},
+		read_only_recipe_for_stage: context => configured.read_only_recipes_by_stage?.[context.stage],
+		verification_for_stage: context => configured.verification_by_stage?.[context.stage] || [],
+		verify_stage: configured.verify_stage,
+		observe_transport: configured.observe_transport,
+		run_external_command: configured.run_external_command,
 		enforce_read_only: (context, args) => context.stage !== 'assessment' || configured.read_only_stages?.includes('assessment') === true && args.length > 0,
 	}) }
 }
 const run = async (facts, options = {}) => {
-	const result = await lifecycle.run_lifecycle(facts, adapters_for(facts))
+	const expected_source = facts.source_root || facts.repository_root
+	if (facts.external_execution?.source_directory && expected_source && path.resolve(facts.external_execution.source_directory) !== path.resolve(expected_source)) {
+		return { status: 'invalid', requirement: 'external execution source does not match the frozen routing source' }
+	}
+	const result = await lifecycle.run_lifecycle(facts, options.adapters || adapters_for(facts), { max_actions: options.max_actions })
 	if (result.facts?.task?.task_id) {
 		const source_root = facts.source_root || facts.repository_root || facts.external_execution?.source_directory
 		const config_path = facts.config_path || (source_root ? path.join(source_root, 'ag.json') : undefined)
@@ -102,15 +127,40 @@ const inspect = (task_id, workspace) => {
 		? { status: 'loaded', revision: loaded.revision, digest: loaded.digest, facts: state.public_projection(loaded.state) }
 		: { status: 'invalid', requirement: 'routing state does not exist' }
 }
-const resume_with_config = async (task_id, workspace, config_path) => {
+const resume_with_config = async (task_id, workspace, config_path, options = {}) => {
 	const loaded = state.load(workspace, task_id)
 	if (!loaded) return { status: 'invalid', requirement: 'routing state does not exist' }
 	if (loaded.state.config_path && path.resolve(loaded.state.config_path) !== path.resolve(config_path)) {
 		return { status: 'invalid', requirement: 'routing state belongs to a different ag.json configuration' }
 	}
-	const identity = resume.validate_loaded_state(loaded.state)
+	if (options.external_execution?.source_directory && path.resolve(options.external_execution.source_directory) !== path.resolve(loaded.state.source_root)) {
+		return { status: 'invalid', requirement: 'external execution source does not match the frozen routing source' }
+	}
+	let config
+	try {
+		config = ag_settings.read_json_config(config_path, { repo_root: loaded.state.source_root, active_host: options.active_host })
+	} catch (error) {
+		return { status: 'invalid', requirement: `current routing configuration is invalid: ${error instanceof Error ? error.message : String(error)}` }
+	}
+	const identity = resume.validate_loaded_state(loaded.state, {
+		...(options.identity_dependencies || {}),
+		read_current_config: () => ({ valid: true, config }),
+	})
 	if (!identity.valid) return { status: 'invalid', requirement: identity.error }
-	return run({ ...loaded.state, workspace_dir: workspace }, { expected_revision: loaded.revision })
+	const prepared = configured_facts({
+		...loaded.state,
+		...(options.external_execution ? { external_execution: options.external_execution } : {}),
+		workspace_dir: workspace,
+	}, {
+		cwd: loaded.state.source_root,
+		config_path,
+		config,
+		active_host: options.active_host,
+		provider_recipes: options.provider_recipes || {},
+		executable_available: options.executable_available,
+	})
+	prepared.workspace_dir = workspace
+	return run(prepared, { ...options, expected_revision: loaded.revision })
 }
 const cli = async ({ command, cwd, facts, task_id, ...options }) => {
 	try {
@@ -129,7 +179,7 @@ const cli = async ({ command, cwd, facts, task_id, ...options }) => {
 			return command === 'plan' ? coordinator.plan_next_action(prepared) : run(prepared)
 		}
 		if (command === 'inspect') return inspect(task_id, workspace)
-		if (command === 'resume') return resume_with_config(task_id, workspace, config_path)
+		if (command === 'resume') return resume_with_config(task_id, workspace, config_path, options)
 		return { status: 'invalid', requirement: 'unsupported route command' }
 	} catch (error) {
 		return { status: 'invalid', requirement: error instanceof Error ? error.message : String(error) }

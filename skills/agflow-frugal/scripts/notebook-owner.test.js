@@ -149,6 +149,31 @@ test('identity requires a retained session and rejects native conflicts while ig
   assert.deepEqual(identity({ host: 'claude', session: 'native-payload', env: {} }), { host: 'claude', session: 'native-payload' });
 });
 
+test('owner refusal identifies host mismatch separately from session mismatch', () => {
+  const root = raw_fixture('+ owner identity test\n');
+  const owner = require('./notebook-owner');
+  const inspection = owner.inspect({ root, notebook });
+  const saved = { thread: process.env.CODEX_THREAD_ID, session: process.env.CODEX_SESSION_ID };
+  try {
+    process.env.CODEX_THREAD_ID = ids.A;
+    process.env.CODEX_SESSION_ID = ids.A;
+    owner.transfer({ root, notebook, host: 'codex', session: ids.A, ask: inspection.ask, expected: 'unowned', sha256: inspection.sha256 });
+    assert.throws(
+      () => owner.guard({ root, notebook, host: 'codex-root', session: ids.A }),
+      /host ID mismatch \(owner codex, writer codex-root\); session ID matches/u,
+    );
+    process.env.CODEX_THREAD_ID = ids.B;
+    process.env.CODEX_SESSION_ID = ids.B;
+    assert.throws(() => owner.guard({ root, notebook, host: 'codex', session: ids.B }), /session ID mismatch/u);
+  } finally {
+    if (saved.thread === undefined) delete process.env.CODEX_THREAD_ID;
+    else process.env.CODEX_THREAD_ID = saved.thread;
+    if (saved.session === undefined) delete process.env.CODEX_SESSION_ID;
+    else process.env.CODEX_SESSION_ID = saved.session;
+  }
+  assert.equal(owner.inspect({ root, notebook }).owner.session, ids.A);
+});
+
 test('Claude Code session identity accepts current and legacy names but rejects disagreements', () => {
   const { identity } = require('./notebook-owner');
   for (const env of [{ CLAUDE_CODE_SESSION_ID: 'current' }, { CLAUDE_SESSION_ID: 'current' }, { CLAUDE_CODE_SESSION_ID: 'current', CLAUDE_SESSION_ID: 'current' }]) {

@@ -1093,11 +1093,41 @@ const read_context_json = file_path => {
       chunks.push(buffer.subarray(0, bytes_read));
     }
 
+    const content = Buffer.concat(chunks, total_bytes);
+    // Filesystems may expose coarse or unchanged timestamps during a same-size
+    // write. Verify the bytes through the opened descriptor as well as its stat.
+    const verification = Buffer.allocUnsafe(total_bytes + 1);
+    let verified_bytes = 0;
+    while (verified_bytes < verification.length) {
+      const bytes_read = node_fs.readSync(
+        descriptor,
+        verification,
+        verified_bytes,
+        verification.length - verified_bytes,
+        verified_bytes,
+      );
+      if (bytes_read === 0) break;
+      verified_bytes += bytes_read;
+    }
     const final_stat = node_fs.fstatSync(descriptor, { bigint: true });
-    if (!same_context_identity(final_stat, opened_stat) || BigInt(total_bytes) !== opened_stat.size) {
+    let path_stat;
+    try {
+      path_stat = node_fs.lstatSync(file_path, { bigint: true });
+    } catch {
       throw new Error('context file changed while reading');
     }
-    file_text = Buffer.concat(chunks, total_bytes).toString('utf8');
+    if (
+      !same_context_identity(final_stat, opened_stat) ||
+      !same_context_identity(path_stat, opened_stat) ||
+      !path_stat.isFile() ||
+      path_stat.isSymbolicLink() ||
+      BigInt(total_bytes) !== opened_stat.size ||
+      verified_bytes !== total_bytes ||
+      !content.equals(verification.subarray(0, verified_bytes))
+    ) {
+      throw new Error('context file changed while reading');
+    }
+    file_text = content.toString('utf8');
   } finally {
     if (descriptor !== null) {
       try {

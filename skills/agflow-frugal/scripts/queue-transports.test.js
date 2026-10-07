@@ -5,7 +5,6 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const crypto = require('node:crypto')
-const { execFileSync } = require('node:child_process')
 const test = require('node:test')
 const looper = require('./looper')
 const settings = require('./ag-settings')
@@ -22,7 +21,7 @@ const fixture_directory = (t, prefix) => {
     assert.equal(current.ino, identity.ino, 'fixture directory was replaced; retaining it')
     // These fixtures use synthetic host/native claims and never start a worker.
     // Keep their unresolved-claim evidence until all test assertions have run.
-    execFileSync('trash', [directory], { stdio: 'pipe' })
+    fs.rmSync(directory, { recursive: true, force: true })
     assert.equal(fs.existsSync(directory), false, 'fixture must leave its scratch location')
   })
   return directory

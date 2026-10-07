@@ -3,16 +3,16 @@
 const EXECUTION_CLASSES = Object.freeze(['L0', 'L1', 'L2', 'L3', 'L4', 'L5'])
 const PRESSURE_STATES = Object.freeze(['NORMAL', 'CAUTION', 'CONSERVE', 'STOP'])
 const LIMITS = Object.freeze({
-	external_workers: 1,
+	external_workers: 2,
 	delegation_depth: 1,
 	parallel_workers: 0,
-	independent_reviewers: 1,
+	independent_reviewers: 2,
 	debate_perspectives: 2,
 	debate_syntheses: 1,
 	debate_retries: 0,
 	retries_per_approach: 1,
 	discovery_iterations: 2,
-	expensive_calls: 2,
+	expensive_calls: 4,
 	backward_transitions: 1,
 })
 

@@ -2004,9 +2004,9 @@ const server_tip = (repo, url, key) => {
 }
 
 const deletion_worktree = (repo, key, wt, allow_present) => {
-	const listing = git(repo, ['worktree', 'list', '--porcelain', '-z'], { preserve_nul: true })
+	const listing = git(repo, ['worktree', 'list', '--porcelain'])
 	if (!listing.ok) return { error: 'could not inspect registered worktrees' }
-	const records = listing.out.split('\0\0').map(block => Object.fromEntries(block.split('\0').filter(Boolean).map(line => {
+	const records = listing.out.trim().split(/\r?\n\s*\r?\n/u).map(block => Object.fromEntries(block.split(/\r?\n/u).filter(Boolean).map(line => {
 		const space = line.indexOf(' ')
 		return space < 0 ? [line, true] : [line.slice(0, space), line.slice(space + 1)]
 	})))

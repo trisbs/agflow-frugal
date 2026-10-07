@@ -130,6 +130,7 @@ test('unavailable provider metadata remains explicitly unknown', () => {
 	assert.equal(record.state, 'unavailable')
 	assert.equal(record.actual.model, 'unknown')
 	assert.equal(record.actual.effort, 'unknown')
+	assert.equal(record.transport.worker_started, false)
 })
 
 test('external adapter rejects fixture recipes outside explicit fixture mode', async () => {

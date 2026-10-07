@@ -292,7 +292,7 @@ const worker_environment = (command, requested_env) => {
   return environment
 }
 
-const run_child = ({ command, cwd, timeout_ms, stall_timeout_ms, nested_poll_ms, list_processes, termination_grace_ms, max_output_bytes, env, result_file_path }) => new Promise(resolve => {
+const run_child = ({ command, cwd, timeout_ms, stall_timeout_ms, nested_poll_ms, list_processes, termination_grace_ms, max_output_bytes, env, result_file_path, signal }) => new Promise(resolve => {
   const stdout_capture = make_capture(max_output_bytes)
   const stderr_capture = make_capture(max_output_bytes)
   let child
@@ -312,6 +312,7 @@ const run_child = ({ command, cwd, timeout_ms, stall_timeout_ms, nested_poll_ms,
       stdout: stdout_capture.finish(),
       stderr: stderr_capture.finish(),
       timed_out: false,
+      cancelled: false,
       stalled: false,
       activity: { state: stall_timeout_ms > 0 ? 'not_observed' : 'disabled', stall_timeout_ms, sample_count: 0, elapsed_ms: 0, last_change_elapsed_ms: null, last_change_signs: [] },
       process_group_timeout: { trigger: 'none', attempted: false, signals: [], terminated: false, group_after: 'unknown', proof: 'not_needed' },
@@ -326,8 +327,10 @@ const run_child = ({ command, cwd, timeout_ms, stall_timeout_ms, nested_poll_ms,
   let close_result = null
   let launch_error = null
   let timed_out = false
+  let cancelled = false
   let stalled = false
   let timeout_cleanup = null
+  let termination_started = false
   let finished = false
   let timeout_handle
   let nested_handle
@@ -337,6 +340,13 @@ const run_child = ({ command, cwd, timeout_ms, stall_timeout_ms, nested_poll_ms,
   let last_change_at = started_at
   let last_change_signs = []
   const nested_worker = { visible: false, detected: false, processes: [], containment: { attempted: false, actions: [] }, poll_count: 0 }
+  const on_abort = async () => {
+    if (finished || close_result || termination_started) return
+    termination_started = true
+    cancelled = true
+    timeout_cleanup = await terminate_process_group(child, termination_grace_ms, 'owner_cancel')
+    finish()
+  }
 
   const observe_nested = () => {
     const table = typeof list_processes === 'function' ? list_processes() : read_process_table()
@@ -375,10 +385,11 @@ const run_child = ({ command, cwd, timeout_ms, stall_timeout_ms, nested_poll_ms,
   observe_nested()
 
   const finish = () => {
-    if (finished || !close_result || ((timed_out || stalled) && timeout_cleanup === null)) return
+    if (finished || !close_result || ((timed_out || stalled || cancelled) && timeout_cleanup === null)) return
     finished = true
     clearTimeout(timeout_handle)
     clearInterval(nested_handle)
+    signal?.removeEventListener('abort', on_abort)
     observe_nested()
     observe()
     const elapsed_ms = Date.now() - started_at
@@ -389,6 +400,7 @@ const run_child = ({ command, cwd, timeout_ms, stall_timeout_ms, nested_poll_ms,
       stdout: stdout_capture.finish(),
       stderr: stderr_capture.finish(),
       timed_out,
+      cancelled,
       stalled,
       activity: {
         state: 'disabled',
@@ -413,8 +425,11 @@ const run_child = ({ command, cwd, timeout_ms, stall_timeout_ms, nested_poll_ms,
     close_result = { exit_code, signal }
     finish()
   })
+  signal?.addEventListener('abort', on_abort, { once: true })
+  if (signal?.aborted) void on_abort()
   if (timeout_ms > 0) timeout_handle = setTimeout(async () => {
-    if (finished || close_result) return
+    if (finished || close_result || termination_started) return
+    termination_started = true
     timed_out = true
     timeout_cleanup = await terminate_process_group(child, termination_grace_ms, 'deadline')
     finish()
@@ -560,6 +575,8 @@ const make_result = async (options, clone, command, before_snapshot, child_resul
       ? 'timed_out'
     : child_result.stalled
       ? 'stalled'
+    : child_result.cancelled
+      ? 'cancelled'
     : child_result.launch_error
       ? 'spawn_error'
       : child_result.close.exit_code === 0
@@ -572,6 +589,7 @@ const make_result = async (options, clone, command, before_snapshot, child_resul
     working_directory: clone.root,
     stdin_closed: true,
     timed_out: child_result.timed_out,
+    cancelled: child_result.cancelled,
     stalled: child_result.stalled,
     exit_code: child_result.close.exit_code,
     signal: child_result.close.signal,
@@ -653,6 +671,7 @@ const run_external_command = async options => {
   const stall_timeout_ms = values.stall_timeout_ms === undefined ? 0 : values.stall_timeout_ms
   const max_output_bytes = values.max_output_bytes === undefined ? MAX_OUTPUT_BYTES : values.max_output_bytes
   const nested_poll_ms = values.nested_poll_ms === undefined ? DEFAULT_NESTED_POLL_MS : values.nested_poll_ms
+  if (values.signal !== undefined && (!values.signal || typeof values.signal.addEventListener !== 'function' || typeof values.signal.removeEventListener !== 'function' || typeof values.signal.aborted !== 'boolean')) throw new Error('signal must be an AbortSignal')
   if (!is_nonnegative_safe_integer(timeout_ms)) throw new Error('timeout_ms must be a non-negative safe integer')
   if (!is_positive_integer(termination_grace_ms)) throw new Error('termination_grace_ms must be a positive integer')
   if (!is_nonnegative_safe_integer(stall_timeout_ms)) throw new Error('stall_timeout_ms must be a non-negative safe integer')
@@ -665,7 +684,7 @@ const run_external_command = async options => {
   const output_collision = declared_result_output_collision(command, clone.root, result_file_path)
   if (output_collision !== null) throw new Error(`Codex ${output_collision.option} must not be used when a declared result path is configured`)
   const before_snapshot = clone_snapshot(clone.root)
-  const child_result = await run_child({ command, cwd: clone.root, timeout_ms, stall_timeout_ms, nested_poll_ms, list_processes: values.list_processes, termination_grace_ms, max_output_bytes, env: values.env, result_file_path })
+  const child_result = await run_child({ command, cwd: clone.root, timeout_ms, stall_timeout_ms, nested_poll_ms, list_processes: values.list_processes, termination_grace_ms, max_output_bytes, env: values.env, result_file_path, signal: values.signal })
   return make_result({ ...values, max_output_bytes }, clone, command, before_snapshot, child_result, result_file_path)
 }
 

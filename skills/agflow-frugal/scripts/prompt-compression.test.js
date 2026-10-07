@@ -58,10 +58,10 @@ test('the slim front door retains the owner, scope, evidence, and Git boundaries
 test('show-diff requires justified, human-scannable unified diff hunks', () => {
 	const skill = read('skills/agflow-frugal/SKILL.md')
 	const writing = read('skills/agflow-frugal/references/writing.md')
-	assert.match(skill, /each logical change.*`Reason:`.*fenced `diff` hunk/is)
-	assert.match(skill, /removed lines.*`-`.*added lines.*`\+`/is)
-	assert.match(skill, /hunk header shows verified old and new line numbers/i)
-	assert.match(writing, /reasoned unified-diff format/i)
+	assert.match(skill, /references\/writing\.md.*show-diff/i)
+	assert.match(writing, /each logical change.*`Reason:`.*fenced `diff` hunk/is)
+	assert.match(writing, /unified-diff markers.*verified old\/new line numbers/is)
+	assert.match(writing, /insertions contain only added lines.*deletions only removed lines/is)
 })
 
 test('general writing guidance preserves requirements refresh history outside advisor-only paths', () => {
@@ -91,10 +91,10 @@ test('the front door makes activation and closeout one-shot operations', () => {
 })
 
 test('the slim front door retains notebook compaction and concise Reply evidence', () => {
-	const skill = read('skills/agflow-frugal/SKILL.md') + '\n' + read('skills/agflow-frugal/references/closeout.md')
+	const skill = read('skills/agflow-frugal/SKILL.md') + '\n' + read('skills/agflow-frugal/references/progress.md') + '\n' + read('skills/agflow-frugal/references/closeout.md')
 	const english = read('skills/agflow-frugal/docs/AG_GUIDE.md')
 	const chinese = read('skills/agflow-frugal/docs/AG_GUIDE.zh-tw.md')
-	assert.match(skill, /automatically compact eligible completed rounds when the notebook exceeds 1,000 lines or reaches 768 KiB/is)
+	assert.match(skill, /Startup and input capture automatically compact eligible completed rounds when a notebook exceeds 1,000 lines or reaches 768 KiB/is)
 	assert.match(english, /after 1,000 lines/i)
 	assert.match(chinese, /超過 1,000 行/i)
 	assert.match(skill, /Do not use a fixed evidence-and-delivery checklist/i)

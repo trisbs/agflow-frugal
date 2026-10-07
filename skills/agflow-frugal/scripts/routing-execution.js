@@ -24,6 +24,7 @@ const observed_actual = observation => ({
 const settled_state = (runner, acceptance) => {
 	if (acceptance.accepted) return 'completed'
 	if (runner.status === 'spawn_error') return 'unavailable'
+	if (runner.status === 'cancelled') return runner.process_group_timeout?.terminated === true ? 'cancelled' : 'uncertain'
 	if (['timed_out', 'stalled', 'nested_worker_violation'].includes(runner.status) || runner.process?.ownership === 'lost') return 'uncertain'
 	return 'task-failed'
 }
@@ -92,6 +93,9 @@ const execution_record = ({ context, runner, paths, brief, outputs = {}, accepta
 		runner_id: 'external-runner-v1',
 		recipe_checked: true,
 		read_only: checked_read_only.valid,
+		...(runner.status === 'spawn_error' ? { worker_started: false } : {}),
+		...(Number.isInteger(runner.process?.pid) ? { worker_started: true } : {}),
+		...(runner.status === 'cancelled' && runner.process_group_timeout?.terminated === true ? { stop_verified: true } : {}),
 		...(checked_read_only.valid ? { read_only_proof: checked_read_only.proof } : {}),
 			...(process ? { process: clone(process) } : {}),
 			...(text(runner.clone?.root) ? { clone: { path: runner.clone.root, ...(text(runner.clone?.head) ? { head: runner.clone.head } : {}) } } : {}),
@@ -164,8 +168,6 @@ const accepted_record = ({ context, runner, output, paths, brief, verification, 
 
 const external_adapter = options => async context => {
 	if (!is_object(options) || typeof options.arguments_for_stage !== 'function' || !text(options.source_directory)) throw new Error('external adapter requires source_directory and arguments_for_stage')
-	const args = options.arguments_for_stage(context)
-	if (!Array.isArray(args) || args.some(arg => !text(arg))) throw new Error('provider recipe must return a literal non-empty argument array')
 	let read_only_recipe
 	if (context.task.require_read_only === true) {
 		const checked = read_only.validate_recipe(options.read_only_recipe_for_stage?.(context))
@@ -178,6 +180,8 @@ const external_adapter = options => async context => {
 	const verification_commands = options.verification_for_stage?.(context) || []
 	if (!Array.isArray(verification_commands)) throw new Error('stage verification commands must be an array')
 	const brief = brief_builder.build({ stage: context.stage, task: context.task, source_identity: context.facts.source_identity, tier: context.tier, verification: verification_commands })
+	const args = options.arguments_for_stage(context, brief.brief)
+	if (!Array.isArray(args) || args.some(arg => !text(arg))) throw new Error('provider recipe must return a literal non-empty argument array')
 	const command = [
 		...context.selection.action.command,
 		...(read_only_recipe?.arguments || []),
@@ -187,17 +191,21 @@ const external_adapter = options => async context => {
 		? read_only.create_dispatch_proof(read_only_recipe, command)
 		: { valid: true, proof: undefined }
 	if (!read_only_result.valid) throw new Error(read_only_result.error)
-	const runner = await (options.run_external_command || external_runner.run_external_command)({ ...options.runner_options, source_directory: options.source_directory, command, result_format: 'json' })
+	const result_format = options.result_format_for_stage?.(context) || 'json'
+	const runner = await (options.run_external_command || external_runner.run_external_command)({ ...options.runner_options, source_directory: options.source_directory, command, result_format })
+	const parsed = typeof options.parse_output === 'function'
+		? await options.parse_output({ context, runner, command: clone(command) })
+		: { value: runner.result.value }
 	const transport_observation = typeof options.observe_transport === 'function'
 		? await options.observe_transport({ context, runner, command: clone(command) })
-		: undefined
+		: parsed?.observation
 	const paths = runner.status === 'completed' && text(runner.clone?.root) ? changed_paths(runner.clone.root) : []
 	const verification = typeof options.verify_stage === 'function'
 		? await options.verify_stage({ context, runner, root: runner.clone?.root, commands: clone(verification_commands) })
 		: verification_commands.length === 0
 			? { coordinator_inspected: true, results: [] }
 			: { coordinator_inspected: false, results: [] }
-	return accepted_record({ context, runner, output: runner.result.value, paths, brief, verification, verification_commands, read_only_proof: read_only_result.proof, transport_observation })
+	return accepted_record({ context, runner, output: parsed?.value, paths, brief, verification, verification_commands, read_only_proof: read_only_result.proof, transport_observation })
 }
 
 module.exports = { changed_paths, safe_relative_path, within_boundary, unknown_source_identity, observed_source_identity, observed_actual, settled_state, attribution_error, observed_process, execution_record, accepted_record, external_adapter }

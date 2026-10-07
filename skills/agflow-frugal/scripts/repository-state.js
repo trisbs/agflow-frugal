@@ -16,17 +16,35 @@ const present = file => {
 // callers may be below a checkout root, and worktrees use a .git file.
 const has_metadata = root => {
   for (let directory = root; ; directory = path.dirname(directory)) {
-    if (present(path.join(directory, '.git')) || ['HEAD', 'objects', 'refs'].every(name => present(path.join(directory, name)))) return true;
+    const marker = path.join(directory, '.git');
+    if (present(marker)) {
+      // Sandboxed hosts may expose an empty, read-only .git directory at a
+      // shared temporary parent. It is not repository metadata. Keep an empty
+      // marker at the requested root suspicious, and retain every non-empty
+      // marker as evidence so malformed repositories still fail closed.
+      const stat = fs.lstatSync(marker);
+      if (directory !== root && stat.isDirectory() && fs.readdirSync(marker).length === 0) {
+        // Continue looking: a real repository may still be higher in the tree.
+      } else {
+        return true;
+      }
+    }
+    if (['HEAD', 'objects', 'refs'].every(name => present(path.join(directory, name)))) return true;
     if (path.dirname(directory) === directory) return false;
   }
 };
 
-const detect = project_root => {
+const detect = (project_root, options = {}) => {
   try {
     const root = fs.realpathSync(project_root);
-    const result = spawnSync('git', ['rev-parse', '--show-toplevel'], {
+    const env = options.env || process.env;
+    const has_git_overrides = Boolean(env.GIT_DIR || env.GIT_WORK_TREE);
+    const metadata = typeof options.has_metadata === 'function' ? options.has_metadata(root) : has_metadata(root);
+    if (!has_git_overrides && !metadata) return { state: 'plain', root, reason: 'not_a_repository' };
+    const run = options.spawn_sync || spawnSync;
+    const result = run('git', ['rev-parse', '--show-toplevel'], {
       cwd: root, encoding: 'utf8', timeout: 30000, maxBuffer: 4096,
-      env: { ...process.env, LC_ALL: 'C' },
+      env: { ...env, LC_ALL: 'C' },
     });
     if (result.status === 0 && result.stdout.trim()) {
       // An unborn repository is still Git-backed; HEAD is not the discriminator.
@@ -34,7 +52,7 @@ const detect = project_root => {
     }
     const missing = result.error?.code === 'ENOENT';
     const not_repository = !result.error && result.status === 128 && /^fatal: not a git repository\b/u.test(result.stderr);
-    if ((missing || not_repository) && !process.env.GIT_DIR && !process.env.GIT_WORK_TREE && !has_metadata(root)) {
+    if ((missing || not_repository) && !has_git_overrides && !metadata) {
       return { state: 'plain', root, reason: missing ? 'git_not_installed' : 'not_a_repository' };
     }
     return { state: 'error', detail: 'Cannot determine repository state safely; check Git availability, repository metadata, permissions, and Git environment overrides before retrying.' };

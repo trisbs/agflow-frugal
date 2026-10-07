@@ -272,7 +272,7 @@ const normalise_initial_language = value => {
 	if (/^(?:C|POSIX)$/iu.test(tag)) return null
 	try {
 		const locale = new Intl.Locale(tag)
-		if (locale.language === 'und') return null
+		if (!locale.language || locale.language === 'und') return null
 		if (locale.language === 'zh') return locale.maximize().script === 'Hant' ? 'zh-tw' : 'zh-cn'
 		return locale.baseName.toLowerCase()
 	} catch { return null }

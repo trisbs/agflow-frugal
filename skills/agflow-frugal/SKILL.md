@@ -49,9 +49,7 @@ Already-launched looper workers follow their supplied plan directly, not this ho
 
    If `hooks_restart_required: true`, tell the owner once to restart the host; until then, use the per-message capture below.
 
-6. Startup and input capture automatically compact eligible completed rounds when the notebook exceeds 1,000 lines or reaches 768 KiB. After the first meaningful response, check its size; before closeout, use `node <active-agentflow-skill-dir>/scripts/agf.js compact --notebook <target-doc>` with the current host/session when compaction is still needed. This command also recovers notebooks already over the former 1 MiB limit. It verifies each physical Ask span by identifier, byte length and SHA-256 in the adjacent archive before removing the same live bytes. It preserves the current round and conservatively retains rounds containing nonempty inline answers; the unselected suffix remains live and authoritative. Perform the answer-recovery gate before separately handling those retained rounds. Stop on collisions, source replacement or uncertain boundaries. A single large open round remains readable and writable; never truncate or archive it to satisfy a size threshold. Individual input and draft limits still apply.
-
-   The notebook and its adjacent archive are the single authoritative conversation history. Completed Ask/RUN/WIP/Reply spans and archived bytes are immutable and append-only; do not rewrite, summarize in place, or reformat them without explicit owner permission. STATUS and live recovery records are mutable projections. Verified byte-preserving compaction is the permitted move, not permission to edit history.
+6. Startup/input capture compact completed rounds when the notebook exceeds 1,000 lines or 768 KiB. Before closeout, read `references/progress.md`; if still needed, run `node <active-agentflow-skill-dir>/scripts/agf.js compact --notebook <target-doc>` with the current host/session and follow its safeguards. The notebook and archive are authoritative append-only history: never edit completed records or archived bytes; only verified byte-preserving compaction may move them.
 
 7. Choose one route: `direct`, `selected_advisors`, `full_pipeline`, or `blocked`. The host owns planning, decisions, orchestration, review, verification, and delivery, and may implement, test, and run commands. 
 
@@ -92,21 +90,21 @@ Answer the entire current Ask in its saved Reply; question-only turns also close
 
 ## Task artifact locations
 
-- `<workspace-dir>` is the validated configured workspace (default `.agentflow`), relative to the active checkout or plain project folder. `<work-key>` starts with the creating Ask: `A-NNN-<name>`.
+- `<workspace-dir>` is the validated workspace (default `.agentflow`) relative to the active checkout/plain folder. `<work-key>` starts with its Ask: `A-NNN-<name>`.
 
-- `<work-root>` is `<workspace-dir>/artifacts/<work-key>/`; in an active stream it is `<workspace-dir>/features/<taskkey>/artifacts/<work-key>/`, where `<taskkey>` is the stream identifier. No-Git work uses the ordinary root; notebook-only streams use the stream root.
+- `<work-root>` is `<workspace-dir>/artifacts/<work-key>/`, or `<workspace-dir>/features/<taskkey>/artifacts/<work-key>/` in a stream. No-Git work uses the ordinary root; notebook-only streams use the stream root.
 
-- In a stream worktree, resolve paths there; never write through to the main checkout or add branch-key directories. Follow `references/streams.md` for routing and ownership.
+- In a stream worktree, resolve paths there; never write to the main checkout or add branch-key directories. Follow `references/streams.md`.
 
-- Put required designs, trackers, briefs, reports, and checkpoints in `<work-root>`; task queues use `<work-root>/planned/`. Preserve existing allocations and create only needed records. Explicit owner destinations override defaults.
+- Put required designs, trackers, briefs, reports, and checkpoints in `<work-root>`; queues use `<work-root>/planned/`. Preserve allocations; create only needed records. Owner destinations override defaults.
 
-- Bare `run-plans` keeps `<workspace-dir>/planned/`; select task or other queues with `--tasks-dir`. Reserve `plan-NNN.md` for executable plans.
+- Bare `run-plans` uses `<workspace-dir>/planned/`; select other queues with `--tasks-dir`. `plan-NNN.md` is for executable plans.
 
-- Use the configured notebook; the standard stream notebook is `<workspace-dir>/features/<taskkey>/<taskkey>.devlog.md`. Notebook/config/archive rules and writer-managed completion metadata under `<workspace-dir>/.tmp/` remain separate. Input receipts for every host also live in that ignored runtime directory; old Codex/Claude receipts are read for continuity without writing their host configuration directories. Workers use their assigned output paths.
+- Use the configured notebook; the standard stream notebook is `<workspace-dir>/features/<taskkey>/<taskkey>.devlog.md`. Completion metadata and all-host input receipts live separately under ignored `<workspace-dir>/.tmp/`; legacy Codex/Claude receipts are read without writing host config directories. Workers use assigned output paths.
 
 ## Scope and evidence
 
-- Task risk determines required checks; observed difficulty determines guidance. Start with outcome, scope, proof, and next action. For known difficulty, use a relevant checklist in the current task record. No model ranking or paid qualification call is needed.
+- Task risk determines required checks; observed difficulty determines guidance. Start with outcome, scope, proof, and next action. For known difficulty, use a relevant checklist in the current task record. Judge support using comparable work and verified success. No model ranking or paid qualification call is needed.
 
 - **Host obligation:** Check factual premises and proposed methods against available evidence. Respectfully challenge mistaken, risky, or needlessly complex ideas with evidence, explain the tradeoff, and propose the simplest useful alternative. Challenge in service of the stated goal; do not invent debate, override informed owner choices, or broaden scope. — I-062.
 
@@ -154,11 +152,9 @@ Answer the entire current Ask in its saved Reply; question-only turns also close
 
 ## Writing styles protocol
 
-Read `references/writing.md` before writing user-facing documentation, editing writing instructions, or following `use-writing-styles`. It owns style scope, document-specific formats, and instruction-edit safeguards.
+Read `references/writing.md` before writing user-facing documentation, editing writing instructions, following `use-writing-styles`, or responding to `show-diff`. It owns style scope, document-specific formats, diff-only output, and instruction-edit safeguards.
 
- When providing replacement or insertion text, state the target file path and current line number(s), and quote the exact text to replace or the insertion anchor. Verify locations against the saved file; if unavailable, say so rather than inventing line numbers.
-
-`show-diff` in the owner's prompt requests only filename headings and, for each logical change, a concise `Reason:` that justifies it followed by an exact fenced `diff` hunk. Use standard unified-diff markers so removed lines start with `-`, added lines start with `+`, and the hunk header shows verified old and new line numbers. Include only enough unchanged context to locate the change; an insertion has only added lines and a deletion only removed lines. Describe binary changes without invented text. Omit summaries, introductions, inspection notes, examples, verification sections and closing commentary. Show snapshot identities only when requested or needed to distinguish baselines. Capture and verify pre-edit text while preserving owner changes; for edits already made, use a verified snapshot or commit. If unavailable, state that the original is unavailable instead of guessing or silently treating HEAD as the original. Put the reasoned hunks in the devlog Reply or a linked file; required devlog records stay outside the diff. This current-Ask control does not authorize edits by itself or change persistent settings.
+When providing replacement or insertion text, state the target file path and current line number(s), and quote the exact text to replace or the insertion anchor. Verify locations against the saved file; if unavailable, say so rather than inventing line numbers.
 
 ## Progress records
 

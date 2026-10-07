@@ -108,6 +108,46 @@ test('plain-folder closeout, preflight and stop work with Git absent from PATH',
   check_callers(f, env);
 });
 
+test('plain-folder detection avoids nested Git while overrides still require a Git probe', t => {
+  const f = fixture(t);
+  let calls = 0;
+  const plain = detect(f.root, {
+    has_metadata: () => false,
+    spawn_sync: () => { calls += 1; throw new Error('Git probe must not run'); },
+  });
+  assert.equal(plain.state, 'plain');
+  assert.equal(calls, 0);
+
+  const overridden = detect(f.root, {
+    has_metadata: () => false,
+    env: { ...process.env, GIT_DIR: path.join(f.root, 'missing-git-dir') },
+    spawn_sync: () => { calls += 1; return { status: null, error: { code: 'EPERM' }, stderr: '' }; },
+  });
+  assert.equal(overridden.state, 'error');
+  assert.equal(calls, 1);
+});
+
+test('an empty ancestor .git sentinel does not turn a plain folder into a repository', t => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'agf-empty-git-ancestor-'));
+  t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(parent, '.git'));
+  const root = path.join(parent, 'plain-project');
+  fs.mkdirSync(root);
+  let probes = 0;
+  const result = detect(root, {
+    spawn_sync: () => { probes += 1; throw new Error('plain folder must not probe Git'); },
+  });
+  assert.equal(result.state, 'plain');
+  assert.equal(result.root, fs.realpathSync(root));
+  assert.equal(probes, 0);
+
+  // An empty marker at the requested project root is still suspicious metadata.
+  const explicit_root = path.join(parent, 'explicit-root');
+  fs.mkdirSync(explicit_root);
+  fs.mkdirSync(path.join(explicit_root, '.git'));
+  assert.equal(detect(explicit_root, { spawn_sync: () => ({ status: 128, stderr: 'fatal: not a git repository' }) }).state, 'error');
+});
+
 test('Reply insertion, context, preflight and stop share local tracker validation', t => {
   const f = fixture(t);
   const context = () => collect({ project_root: f.root, notebook_path: f.manifest.notebook, active_host: 'codex', devlog_text: fs.readFileSync(path.join(f.root, f.manifest.notebook), 'utf8') });
@@ -234,6 +274,7 @@ test('filesystem-native metadata lookup protects mixed-case Git directories and 
 
 test('unexpected Git failures and environment overrides cannot manufacture a plain folder', t => {
   const f = fixture(t);
+  initialize_git(f.root);
   const bin = path.join(f.root, 'bin');
   fs.mkdirSync(bin);
   fs.writeFileSync(path.join(bin, 'git'), `#!${process.execPath}\nprocess.stderr.write('fatal: unexpected failure'); process.exit(128);\n`, { mode: 0o755 });
@@ -263,7 +304,7 @@ for (const mode of ['plain', 'git']) test(`${mode} tracked completion has a real
     cwd: f.root, encoding: 'utf8', env: { ...process.env, JOURNEY_INPUT: JSON.stringify(f.manifest), JOURNEY_NODE: process.execPath, JOURNEY_AGF: path.join(__dirname, 'agf.js') },
   });
   assert.equal(journey.status, 0, journey.stdout + journey.stderr);
-  assert.match(journey.stdout, /\/dev\/tt/);
+  assert.match(journey.stdout, /\/dev\/(?:tty|pts\/)/);
   assert.match(journey.stdout, /Save a local artifact/);
   assert.match(journey.stdout, mode === 'plain' ? /"state": "not_applicable"/ : /"state": "created"/);
   assert.match(fs.readFileSync(path.join(f.root, f.manifest.notebook), 'utf8'), /# → Ask \/ A-002/);

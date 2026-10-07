@@ -226,6 +226,8 @@ Type `settings` to see the active values and available choices. To change one, s
 
 - **Worker families:** `cli-provider: on|off` filters only external profiles. `on` admits configured eligible families; `off` needs a known current `host-family`, and an unknown family matches none. Internal and host routes are governed by their own capabilities.
 
+- **Routing CLI status:** the checkout's `agf route plan|run|resume|inspect` commands expose experimental structured routing results. Durable resume data is a redacted `state.json`; provider recipes and adapters are transient and must be supplied again. External workers run in independent clones without remotes. A local owner cancel is reported as verified only when the local process group stops; remote provider-side cancellation is not proven. The optional live-provider gate requires a version-1 recipe matching the configured provider family and cheap-tier model/effort, pre-plans the route to confirm that tier, and warns before launch. Provider flags are passed explicitly; actual model/effort remain `unknown` unless provider output exposes them. This path has deterministic fake-provider coverage but no paid live-provider validation, so it is not yet a production-ready paid-provider path.
+
 - **Notebook location:** `target-doc: .agentflow/shop.devlog.md` requests a managed rename. It requires Git and moves the notebook and archive, then updates settings and forwarding links. Follow the forwarding note at the old location.
 
 <details>

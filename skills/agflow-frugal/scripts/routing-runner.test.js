@@ -28,6 +28,16 @@ test('routing runner does not invent an external adapter without an explicit pro
 	assert.equal(result.status, 'unsatisfied')
 })
 
+test('routing runner refuses an external execution source that differs from the frozen source', async () => {
+	const result = await runner.run({
+		source_root: '/frozen/source',
+		external_execution: { source_directory: '/different/source', arguments_by_stage: { primary: ['--fixture'] } },
+		task: { task_id: 'task-source-mismatch' },
+	})
+	assert.equal(result.status, 'invalid')
+	assert.match(result.requirement, /does not match the frozen routing source/)
+})
+
 test('routing inspect exposes only the redacted public state projection', async () => {
 	const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'routing-runner-inspect-'))
 	state.save(workspace, 'task-inspect', {
@@ -94,6 +104,45 @@ test('configured profiles exclusively supply route selection model and effort', 
 	assert.equal(result.selection.candidate_id, profile.id)
 	assert.equal(result.selection.actual.model, profile.tiers.cheap.split('/')[0])
 	assert.equal(result.selection.actual.effort, profile.tiers.cheap.split('/')[1])
+})
+
+test('live provider adapter builds configured tier arguments and keeps unobserved identity unknown', async () => {
+	const config = require('./ag-settings.js').make_template('codex')
+	const profile = config['external-workers'][0]
+	const [model, effort] = profile.tiers.cheap.split('/')
+	const source_identity = { source_kind: 'git', value: 'a'.repeat(40) }
+	let launched
+	const facts = {
+		config,
+		provider_recipes: { [profile.id]: { schema_version: 1, family: 'codex', tier: 'cheap', model, effort, checked: true, validation: 'live-provider' } },
+		external_execution: {
+			source_directory: process.cwd(),
+			run_external_command: async options => {
+				launched = options.command
+				return {
+					status: 'failed',
+					stdout: JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'result' } }),
+					result: { value: null },
+					process: { pid: 123, exit_code: 1 },
+					clone: { head: source_identity.value },
+					limitations: [],
+				}
+			},
+		},
+	}
+	const context = {
+		stage: 'primary',
+		tier: 'cheap',
+		task: { task_id: 'provider-adapter', role: 'implementation', brief: { goal: 'test' }, work_boundary: ['src/a.js'] },
+		facts: { source_identity },
+		selection: { candidate_id: profile.id, actual: { model: profile.tiers.cheap.split('/')[0], effort: profile.tiers.cheap.split('/')[1] }, requested: {}, action: { command: profile.command } },
+	}
+	const record = await runner.adapters_for(facts).external(context)
+	assert.ok(launched.includes('--json'))
+	assert.ok(launched.includes(profile.tiers.cheap.split('/')[0]))
+	assert.ok(launched.includes(`model_reasoning_effort=${profile.tiers.cheap.split('/')[1]}`))
+	assert.equal(record.actual.model, 'unknown')
+	assert.equal(record.actual.effort, 'unknown')
 })
 
 test('route CLI rejects unknown provider recipes and has deterministic status codes', async () => {

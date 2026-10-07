@@ -107,19 +107,25 @@ test('L5 uses basic coordination and better only after every debate gate passes'
 
 test('retry and budget exhaustion stop rather than escalate', () => {
 	assert.equal(policy.budget_state({ retries_per_approach: 2 }).pressure, 'STOP')
-	const stopped = policy.route_task({ material_uncertainty: true }, { external_workers: 2 })
+	const stopped = policy.route_task({ material_uncertainty: true }, { external_workers: 3 })
 	assert.equal(stopped.route, 'STOP')
 	assert.match(stopped.stop_reason, /external_workers/)
 })
 
-test('conserve pressure preserves required tiers but disables better work', () => {
+test('raised worker, reviewer, and Better-call ceilings preserve the required journey', () => {
 	const delegated = policy.route_task({ material_uncertainty: true, substantial_mechanical_execution: true }, { external_workers: 1 })
-	assert.equal(delegated.pressure, 'CONSERVE')
+	assert.equal(delegated.pressure, 'NORMAL')
 	assert.equal(delegated.route, 'Basic Direct')
 	assert.equal(delegated.primary_tier, 'basic')
 	const reviewed = policy.route_task({ high_consequence: true, material_risk: true, deterministic_verification_sufficient: false }, { external_workers: 1 })
-	assert.equal(reviewed.review, false)
-	assert.equal(reviewed.secondary_tier, null)
+	assert.equal(reviewed.pressure, 'NORMAL')
+	assert.equal(reviewed.review, true)
+	assert.equal(policy.budget_state({ external_workers: 1 }).pressure, 'NORMAL')
+	assert.equal(policy.budget_state({ external_workers: 2 }).pressure, 'CONSERVE')
+	assert.equal(policy.budget_state({ expensive_calls: 3 }).pressure, 'NORMAL')
+	assert.equal(policy.budget_state({ expensive_calls: 4 }).pressure, 'CONSERVE')
+	assert.equal(policy.budget_state({ independent_reviewers: 1 }).pressure, 'NORMAL')
+	assert.equal(policy.budget_state({ independent_reviewers: 2 }).pressure, 'CONSERVE')
 })
 
 test('routing arrays reject malformed evidence', () => {

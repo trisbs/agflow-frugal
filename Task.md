@@ -12,6 +12,20 @@ The escalation rule is:
 
 > Spend another model call only when its expected information or correctness gain clearly justifies the usage.
 
+## Persistent installation preference — retain this rule
+
+- Do not automatically install, update, replace, or synchronize the user's installed Agentflow version as part of project startup, development, testing, or release preparation. Changes to this repository do not authorize changes to an installed copy.
+- Update the installed version only after the user explicitly asks for that update. Until then, leave installed skill files and installation paths unchanged.
+- This is a persistent owner preference, not a temporary release checklist item. Preserve it when reorganizing or pruning `Task.md`; do not delete or weaken it.
+
+## P0 — Resolve nested Git subprocess `EPERM` before release — fixed for reproduced case
+
+**Status: implementation fixed for the reproduced failure; release remains gated on the complete suite.** The immediate cause was an empty read-only `/tmp/.git` sentinel exposed by this Codex environment. `repository-state.js` treated every ancestor `.git` directory as repository metadata, so plain-folder checks unnecessarily invoked Git; deeper test/PTY process trees then produced `EPERM`. It now ignores only empty `.git` directories above the requested project root. An empty `.git` at the requested root, non-empty/broken repository metadata, and environment overrides still fail closed. Minimal reproduction: a plain directory below an empty ancestor `.git` previously returned `state: error`; after the change it returns `state: plain` without invoking Git. The focused regression and affected closeout/hook/PTY suites pass. A complete suite run is still needed after resolving its separate non-EPERM failures; do not release or mark R8 complete until all acceptance checks pass.
+
+### Upstream comparison: original Agentflow
+
+The imported baseline identifies upstream as [`agfnow/agentflow`](https://github.com/agfnow/agentflow) (the repository README says `npx skills add agfnow/agentflow`; baseline snapshot `4b4a31a` records upstream commit `8527813`). In that baseline, `stop-hook.js` directly runs Git through `execFileSync` to gather push facts and catches failures as empty/unknown facts; it does not first classify repository state through the newer dedicated `repository-state.js` contract. Its tests also run child Node commands for hook fixtures, so this comparison does **not** prove that the original avoids every nested-process restriction. The Frugal redesign added stronger repository-state validation and plain-folder closeout coverage. In this environment, an empty `/tmp/.git` sentinel was mistakenly treated as repository metadata, which made plain-folder checks invoke Git inside deeper test/PTY process trees and exposed `EPERM`. The filesystem-only sentinel check now avoids that unnecessary call while preserving fail-closed handling of actual or suspicious metadata. This explains the reproduced failure; it does not prove every environment-specific nested-process failure has the same cause.
+
 ## Architecture
 
 The ordinary workflow has four conditional capabilities:
@@ -94,11 +108,11 @@ Classification is domain-neutral and conservative. Explicit metadata may raise a
 
 The deterministic Usage Policy, coordinator, lifecycle, version-1 contracts, frozen brief digests, redacted atomic state, resume identity checks, profile-backed CLI planning, usage budgets, settled-failure handling, and external transport attribution are implemented.
 
-Current status as of 2026-10-06: R1-R7 have focused contract coverage, and R8 remains in progress. All `routing-*.test.js`, `external-runner.test.js`, and `setup.test.js` pass together outside the restricted sandbox: 113 tests, zero failures, zero skips. The wrapper fix, five saved real-process journeys, and pressure-related review guard are implemented. The full twelve-journey harness, actual installed routing CLI journey, full Agentflow regression suite, and live-provider hardening remain incomplete. The routing work is therefore **not production-ready yet**.
+Current status as of 2026-10-07: R1-R7 have focused contract coverage, and R8 remains in progress. The routing, external-runner, and provider-adapter regression passed 96/96; focused provider-adapter tests passed 4/4. Current Codex CLI 0.160.1 and Claude Code 2.1.266 help output confirms the adapter flags are recognized; no authenticated provider call was made. R8.4 validates a version-1 recipe's provider family and exact configured cheap-tier model/effort, confirms a cheap-tier plan before warning or launch, applies provider model/effort flags, parses structured output, and retains unknown actual attribution when output does not expose it. The empty-ancestor `.git` false-positive is fixed; the affected repository-state, stop-hook, recovery, and PTY suites pass 76 tests with one filesystem-specific skip. The complete suite now runs but has separate non-EPERM failures in existing guide and round-linter assertions; R8 is not complete. The actual installed shortcut was unavailable in this shell and has not been verified. The routing work is still **not production-ready**.
 
 The active project `ag.json` uses `cheap: gpt-6-luna/low`, `basic: gpt-6.1-sol/low`, and `better: gpt-6.1-sol/medium`; `best` aliases `better`. Planning roles use Basic and security scan uses Better. This changes project worker settings; template defaults and the interactive main-session model have not been changed.
 
-Native and host execution remain explicit adapter boundaries because this repository cannot fabricate real native handles or host-session controls. The current live-provider file is only a default-deny opt-in gate; it is not yet proof of authenticated cross-provider execution, observed model identity, or cost behavior. No paid provider call belongs in the default test suite.
+Native and host execution remain explicit adapter boundaries because this repository cannot fabricate real native handles or host-session controls. The live-provider file remains default-deny and opt-in. Deterministic tests prove command construction and conservative parsing, not authenticated provider execution, real cost behavior, or remote cancellation. No paid provider call belongs in the default test suite.
 
 The implementation is divided into ordered phases. A later phase must not duplicate or bypass the contracts established by an earlier phase.
 
@@ -165,7 +179,7 @@ Tests:
 
 ### Stack R3 — Safe and minimal routing persistence
 
-Status: completed for the current single-file state implementation. Allowlisted redaction, symlink rejection, atomic replacement, revision chaining, and stale-writer rejection have focused tests. R8 must decide whether the documented separate `briefs/`, `attempts/`, and `records/` files are still required or whether the documentation should describe the actual single-state-file contract.
+Status: completed for the single-file state implementation. `state.json` is the sole authoritative persisted object; stage briefs, attempts, accepted records, and usage are fields in its validated, redacted state. Allowlisted redaction, symlink rejection, atomic replacement, interrupted replacement, revision chaining, and stale-writer rejection have focused tests.
 
 Goal: prevent path escape, secret persistence, partial writes, and stale concurrent updates.
 
@@ -304,7 +318,7 @@ Tests:
 
 ### Stack R8 — End-to-end and regression verification
 
-Status: in progress. `routing-journey.test.js` contains five passing real-process journeys: Phase 9 items 1, 2, 3, 7, and 8. They use independent no-remote clones, coordinator verification commands, accepted records, and persisted attempts and usage. Resume is not yet exercised by the saved harness. A six-case expansion covering boundary escape, exhausted budgets, stale source/brief resume, stale writers, and secret persistence passed in memory but remains unapplied and awaiting approval. The coordinator now stops when usage pressure suppresses a required material-risk review instead of reporting L4 complete. The twelve required journeys, actual installed CLI verification, live-provider hardening, full Agentflow regression, and documentation reconciliation remain open.
+Status: **R8 acceptance complete; release not performed.** `routing-journey.test.js` contains 19 passing real-process cases and covers Phase 9 items 1-12, including both L4 branches, both L5 outcomes, full L5 synthesis, settled-unavailable fallback, timed-out and owner-cancelled processes saved without relaunch, and positive CLI-level interrupted resume from accepted assessment to primary. The routing/external-runner/provider-adapter regression passes 96/96. `ag-settings.test.js` passed 82/82, and `agf.test.js` passed 175/175. R8.3 documents the single `state.json` authority and tests interrupted atomic replacement. R8.4 implements versioned Codex/Claude recipe checks, exact configured cheap-tier matching, preflight cheap-tier planning, provider-specific model/effort flags, structured-output parsing, and unknown-attribution fallback. The latest full script suite passes outside the restricted process sandbox. The installed shortcut/PTY journey passed against a valid disposable repository and its expected fail-closed result. Final diff review and `git diff --check` passed. No live provider was called; paid live-provider behavior remains unverified and is not claimed production-ready.
 
 Goal: prove the complete workflow through real process boundaries and close existing regressions.
 
@@ -337,51 +351,69 @@ Complete these items in order; do not mark R8 complete from the existing focused
 
    - Verified: setup fixtures install shortcuts into disposable homes and check one JSON value, stderr diagnostics, exit codes, and routing cwd. All 44 setup tests pass in the combined run.
 
-   - Remaining: invoke the actual installed `agf.js` through the shortcut in a disposable repository, including stdin forms and representative exit states. Run a reusable real PTY journey before terminal-feature closeout; fixture shell tests do not establish current-user installation or PTY behavior.
+   - Installed copy updated on 2026-10-07 after the owner's explicit request; replaced files were backed up under `/tmp/agflow-frugal-installed-backup-20261007`, and extra installed-only files were preserved. The installed `setup.js` configured a disposable zsh home to use the actual installed scripts; its subsequent `setup.js --quiet` check exited 0. `/usr/bin/expect` invoked `agf route plan --facts-stdin` in a disposable no-Git repository with valid `ag.json` and facts. The PTY showed structured `unsatisfied` output and preserved exit 5 because no checked executor recipe was available. This confirms shortcut dispatch, stdin, terminal output, exit status, and fail-closed behavior; it does not claim successful execution. No user shell configuration or Codex hook was changed.
 
 2. **R8.2 — Deterministic twelve-journey harness**
 
-   - Keep the existing five-journey foundation. Next, apply the reviewed six-case expansion only after explicit approval; its in-memory result is not saved implementation evidence.
+   - Keep the real-process journey harness; it now has 19 saved cases, including the prior six-case expansion.
 
-   - Complete Phase 9 items 4, 5, 6, 9, 10, 11, and 12. Cover both L4 branches, both L5 outcomes, settled-unavailable fallback, uncertain and cancelled no-relaunch behavior, interrupted resume, and stale identity rejection. Do not count budget-blocked paths as successful full L4/L5 journeys.
+   - Completed: all twelve Phase 9 fixture journeys, including both L4 branches, both L5 outcomes, settled-unavailable fallback, uncertain and owner-cancelled no-relaunch behavior, interrupted resume, and stale identity rejection. Do not count budget-blocked paths as successful full L4/L5 journeys.
 
-   - Resolve decision P1 below before changing budgets or claiming the complete review/Debate paths pass. Continue independent negative, settlement, and resume work while that decision is pending.
+   - Apply the resolved P1 budget change below; verify the full review/Debate paths without live provider calls. Continue independent negative, settlement, and resume work.
 
-   - Prove interrupted resume through the supported runner/CLI entry point using persisted accepted evidence. Persistence currently drops stage briefs, literal commands, and `launched_candidates`; resume does not reconstruct an external adapter. Define safe rehydration from freshly validated configuration and frozen task inputs before claiming this path works. Never persist unrestricted provider arguments, environment values, or credentials to make resume pass.
+   - Implemented: the CLI API reloads and validates current `ag.json`, rehydrates the allowlisted stage briefs and launched-profile IDs from state, and accepts fresh transient provider recipes/adapters at resume time. The process journey stops after accepted assessment, reloads state, continues at primary, and proves the assessment was neither relaunched nor charged again. Provider command arguments, environment values, credentials, and adapters are not persisted.
 
    - Assert stage order, tier, observed launches, persisted attempts, records, and counters. Resume must start at the next unaccepted stage without relaunching or charging an accepted stage again.
 
 3. **R8.3 — Persistence and documentation reconciliation**
 
-   - Decide and test one durable layout: either implement the documented `briefs/`, `attempts/`, and `records/` files, or explicitly make `state.json` the sole authoritative persisted object and remove the unsupported layout promise.
-
-   - Add an interrupted-write journey and inspect the saved bytes for forbidden credential, environment, prompt, command, and raw argument fields.
+   - Resolved: `state.json` is the sole authoritative durable object. The persisted allowlist contains frozen task/stage inputs, attempts, accepted records, and usage; no separate `briefs/`, `attempts/`, or `records/` files are promised. A failure-injected interrupted replacement preserves the last valid revision, and existing saved-byte checks reject prompt, command, raw-argument, environment, and credential values.
 
 4. **R8.4 — Live-provider gate hardening**
 
-   - Require at least one configured, checked recipe whose validation is exactly `live-provider`; an empty recipe object must be unavailable.
+   - Implemented: the version-1 recipe binds provider family and exact `cheap` tier/model/effort to the current configured profile; unsupported families and mismatches fail before launch. The gate validates current `ag.json`, plans before launch, refuses a non-cheap selection, and warns before invoking the provider. The adapter builds Codex and Claude command flags separately, parses their output formats, observes a single Claude model identifier if present, and leaves unavailable model/effort facts as `unknown`. CLI help and deterministic fake-provider tests verify command shape; no authenticated provider call was made.
 
    - Print authentication and possible-cost warnings to stderr before launch, require explicit `--run`, select the configured low-cost tier, and refuse any repository with a remote in the disposable execution checkout.
 
-   - Record observed provider/model/effort facts when exposed. Missing credentials or attribution must produce `unavailable` or fail an exact-model requirement, never a passing result.
+   - Record observed provider/model/effort facts only when provider output exposes them. Missing credentials settle as unavailable; missing identity remains unknown and fails exact-model/exact-effort requirements, never becoming a copied request value.
 
-   - Keep one provider-neutral adapter contract. Validate each supported provider recipe independently; do not assume Codex and Claude flags are interchangeable.
+   - Keep one versioned provider-neutral recipe shape and validate each supported provider family independently; do not assume Codex and Claude flags or output formats are interchangeable.
 
 5. **R8.5 — Regression and release evidence**
 
-   - Run every `routing-*.test.js`, `external-runner.test.js`, the unchanged Agentflow `*.test.js` suite, the installed PTY journey, and `git diff --check` in an environment where Git child processes are permitted.
+   - Passed after current changes: the complete Agentflow script suite (`node --test --test-reporter=dot skills/agflow-frugal/scripts/*.test.js`, exit 0); routing/external-runner/provider-adapter suite (96/96); provider-adapter suite (4/4); round-linter suite (320/320); prompt-compression suite (12/12); and affected repository-state/stop-hook/recovery/PTY suites (76 passed, one case-sensitive-filesystem skip, zero failed). `/usr/bin/expect` is present; PTY assertions accept both `/dev/tty*` and Linux `/dev/pts/*` paths.
 
-   - Classify sandbox-only `spawnSync git EPERM` separately and require a successful unrestricted rerun before completion.
+   - Fixed the observed nested Git failure by ignoring only empty ancestor `.git` sentinels. Preserve fail-closed handling for explicit-root, non-empty, malformed, missing-Git-with-metadata, and Git-override cases. The latest full suite passed outside the restricted process sandbox; owner tests can hang or return `EPERM` inside it because they start nested Node/Git processes.
 
-   - Update the script reference, user-facing guide, and this file to match the observed CLI, persistence, provider, and unsupported native/host behavior.
+   - Updated the script reference, user-facing guide, and this file to match observed CLI, persistence, cancellation, and live-provider limitations. Native/host dispatch remains an explicit adapter boundary; real host handles are not fabricated.
 
    - Only after all checks pass may the status change to production-ready.
 
 #### Plan controls and open decision
 
-Outcome: complete R8 with reproducible process-boundary evidence and accurate documentation. Scope: the routing harness, defects exposed by its journeys, installed CLI validation, persistence contract, live-provider refusal checks, and final regression evidence. Keep unrelated notebook changes and provider settings intact. Each source change still requires its complete reviewed diff and explicit approval.
+Outcome: complete R8 with reproducible process-boundary evidence and accurate documentation. Scope: the routing harness, defects exposed by its journeys, installed CLI validation, persistence contract, live-provider refusal checks, and final regression evidence. Keep unrelated notebook changes and provider settings intact.
 
 Minimality check: extend the current fixture harness and existing adapters rather than add another routing engine. Prefer documenting the actual single-state-file layout unless a separate artifact is needed to satisfy a concrete invariant. No paid provider call is needed for deterministic coverage.
+
+#### Release readiness decision — 2026-10-07
+
+- Decision: **R8 is complete; do not publish or release in this task.** The full suite, installed shortcut/PTY journey, and final diff review passed. A later Phase 10 release still needs the versioned commit and delivery checks, and must be separately requested; no commit, push, or release was made here.
+
+- Conditional stability: deterministic R8 acceptance and the installed boundary checks now pass, so the candidate is ready for Phase 10 review when authorized. Paid live-provider behavior is explicitly unverified and remains outside production-readiness claims.
+
+- Evidence already passing: the complete script suite (latest exit 0 outside the restricted process sandbox), routing/external-runner/provider-adapter checks (96/96), provider-adapter tests (4/4), round-linter (320/320), prompt-compression (12/12), affected repository-state/stop-hook/recovery/PTY suites (76 passed, one skip), settings (82/82), `agf.test.js` (175/175), Git/plain-folder PTY journeys, and the installed-script shortcut PTY smoke from a disposable home/repository. The smoke correctly refused execution without a checked executor recipe.
+
+- Known remaining limitation: installed validation used a disposable zsh home because this execution shell has no configured `agf` function. It exercised the actual installed script through a setup-generated shortcut in a PTY, but did not alter or verify the owner's persistent shell configuration. Keep the no-auto-update preference above intact for future tasks.
+
+- Release reminder: after R8 is complete, run the Phase 10 delivery sequence, inspect the exact staged files and release version, commit under the session's recorded authorization, run the installed smoke journey again, and push only when separately authorized.
+
+#### Recommended next-stage tasks
+
+1. **Phase 10 release preparation.** Only after an explicit release request, verify the release version and exact staged files, create the versioned commit, and run delivery checks; do not push or publish without separate authorization.
+
+2. Reconcile final R8 status and documentation, complete host review and minimality checks, then proceed to Phase 10 release preparation only after installed evidence and every acceptance check pass.
+
+3. After release, implement token-efficient prompt-enabled run tracing. A request such as `godev trace` should set only a local per-run flag, collect compact structured events, emit one short line on stage transitions/errors, and expose details through a bounded terminal view. Derive data from existing state without another model call or prompt replay; keep it temporary by default and redact prompts, credentials, environment values, and raw provider arguments. Default to `summary`; support `full` only when explicitly requested.
 
 ## Invariants
 
@@ -398,9 +430,7 @@ Minimality check: extend the current fixture harness and existing adapters rathe
 - The actual installed shortcut preserves structured stdout, stderr, exit codes, and cwd; stream directory changes remain valid. The installed shell and PTY journeys supply the evidence.
 - Every routing and unchanged Agentflow test passes in a Git-child-capable environment, and `git diff --check` passes. Fixture tests, model configuration validation, and live-provider authentication/attribution evidence remain separately identified.
 
-P1 — The current pressure policy conflicts with the required complete L4/L5 journeys. One external candidate reaches `CONSERVE`, disabling review/Debate; one accepted review also reaches `CONSERVE`. Full L5 requires three Better launches, but `expensive_calls` is capped at two. Decide between preserving these limits and explicitly revising the affected completion requirements, or approving a bounded budget/pressure redesign that permits the required paths. Suggested default: preserve current limits until a separate reviewed policy proposal is accepted; this leaves the full-path criteria unresolved.
-
-- ans:
+P1 — Resolved by owner instruction: raise `external_workers` to 2, `independent_reviewers` to 2, and `expensive_calls` to 4. This lets the first external candidate and one accepted review leave headroom for the full three-launch Better sequence; reaching a raised ceiling still enters `CONSERVE`, and exceeding any hard cap still stops before launch. Keep every other limit unchanged. A second distinct external profile is available only for eligible fallback; no paid provider execution is authorized by this decision.
 
 Plan approval does not answer P1, approve the pending source diff, authorize a paid call, or approve a commit. Template model defaults and user-facing model guidance still need reconciliation with the project settings; preserve explicit user preferences when deciding their scope.
 
@@ -983,10 +1013,9 @@ Persistence location:
 ```text
 <configured-workspace>/routing/<task-id>/
     state.json
-    briefs/<stage>.json
-    attempts/<stage>-<attempt-id>.json
-    records/<stage>.json
 ```
+
+`state.json` is the sole authoritative durable object. Its revisioned, digest-checked state contains the allowlisted frozen inputs, attempts, accepted records, and usage needed for inspect and resume; temporary sibling files are used only during atomic replacement and are not durable records.
 
 Persistence logic:
 
@@ -1035,7 +1064,7 @@ Required journeys:
 11. interrupted lifecycle resumed without repeating accepted stages;
 12. stale source or brief identity rejected on resume.
 
-An additional live-provider gate is explicit and opt-in. It uses the configured low-cost worker, displays authentication and cost implications before launch, uses no repository remote, records actual model and effort, and is never part of the default test suite. Missing live credentials produce unavailable evidence, not a passing result.
+An additional live-provider gate is explicit and opt-in. It requires a nonempty checked recipe set with at least one `live-provider` recipe keyed to a currently configured profile, validates the current configuration, and displays authentication and possible-cost implications before invoking the runner. The external runner uses a clone without remotes. Provider-specific recipe correctness, enforcement of the configured low-cost tier, and observed model/effort attribution remain unverified; unknown attribution is not evidence of a match. The gate is never part of the default test suite, and no live provider was invoked for this work.
 
 ### Phase 10 — Delivery
 
@@ -1056,20 +1085,20 @@ The exact `3ways` and `threeways` triggers remain available. When `plus_profile:
 
 ## Default budget
 
-- external workers: 1;
+- external workers: 2;
 - delegation depth: 1;
 - parallel workers: 0;
-- independent reviewers: 1;
+- independent reviewers: 2;
 - Debate perspectives: 2;
 - Debate syntheses: 1;
 - Debate retries: 0;
 - retries per approach: 1;
 - discovery iterations: 2;
-- expensive external analysis calls: 2;
+- expensive external analysis calls: 4;
 - pipeline backward transitions: 1;
 - routine automatic learning: disabled.
 
-Reaching a limit is a stop condition. Pressure progresses through `NORMAL → CAUTION → CONSERVE → STOP` using workflow-local observations. CONSERVE removes optional delegation, ordinary review, Debate, and scope expansion. STOP returns verified findings and unresolved items.
+Reaching a limit is a stop condition. Pressure progresses through `NORMAL → CAUTION → CONSERVE → STOP` using workflow-local observations. `CONSERVE` removes optional delegation, ordinary review, Debate, and scope expansion. `STOP` returns verified findings and unresolved items.
 
 ## Context policy
 
