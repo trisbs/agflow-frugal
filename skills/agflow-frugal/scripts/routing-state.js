@@ -30,7 +30,18 @@ const persisted_fields = Object.freeze([
 	'config_path',
 	'resume_identity',
 ])
-const forbidden_key = key => /^(?:env|environment|runner_options|arguments_by_stage|command|args|arguments|prompt|message|authorization|api[_-]?key|token|secret|password|credential|stdout|stderr)$/iu.test(key)
+const forbidden_key = key => {
+	const normalized = key.toLowerCase().replace(/[^a-z0-9]/gu, '')
+	return ['env', 'environment', 'command', 'args', 'arguments', 'prompt', 'message', 'authorization', 'apikey', 'token', 'secret', 'password', 'credential', 'credentials', 'stdout', 'stderr'].includes(normalized)
+		|| /(?:token|secret|apikey|password|credential|credentials|bearer|privatekey|cookie|sessionkey|signingkey)(?:value|header|key|data|raw|hash|pem|der|bytes|contents?)?$/u.test(normalized)
+		|| normalized.includes('environment')
+		|| /env(?:vars?|variables?)$/u.test(normalized)
+		|| /(?:command|prompt|message|stdout|stderr)$/u.test(normalized)
+		|| normalized.startsWith('authorization')
+		|| normalized.includes('runneroptions')
+		|| normalized.includes('argumentsbystage')
+		|| ['rawargs', 'rawarguments', 'providerargs', 'providerarguments', 'commandargs'].includes(normalized)
+}
 
 const redact = value => {
 	if (Array.isArray(value)) return value.map(redact)

@@ -118,3 +118,29 @@ test('routing state persists only redacted allowlisted fields', () => {
 	assert.deepEqual(loaded.state.launched_candidates, ['fixture-profile'])
 	assert.equal(Object.hasOwn(loaded.state, 'external_execution'), false)
 })
+
+test('routing state removes nested credential keys regardless of key naming style', () => {
+	const projected = state.persistable_state({
+		task: {
+			task_id: 'task-credential-redaction',
+			access_token: 'private-access-token',
+			client_secret: 'private-client-secret',
+			environmentVariables: { fixture_value: 'private-environment-value' },
+			auth: { refreshToken: 'private-refresh-token', safe_label: 'keep this' },
+		},
+		records: {
+			primary: {
+				outputs: {
+					provider: { clientSecret: 'private-nested-secret', apiKey: 'private-api-key', privateKeyPem: 'private-key-material' },
+					result: 'accepted result',
+				},
+			},
+		},
+	})
+	const serialized = JSON.stringify(projected)
+	for (const secret of ['private-access-token', 'private-client-secret', 'private-refresh-token', 'private-environment-value', 'private-nested-secret', 'private-api-key', 'private-key-material']) {
+		assert.equal(serialized.includes(secret), false)
+	}
+	assert.equal(projected.task.auth.safe_label, 'keep this')
+	assert.equal(projected.records.primary.outputs.result, 'accepted result')
+})
