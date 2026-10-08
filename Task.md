@@ -24,7 +24,7 @@ For work the owner clearly requests within this project, do not pause for per-di
 
 ## P0 — Do not re-ask for authorized project diffs or commits — workflow regression
 
-**Status: project-local instruction fix implemented 2026-10-08; recurrence validation remains open.** On 2026-10-08, the assistant again requested diff approval after the owner had already established a persistent no-per-diff/no-per-commit rule for this project.
+**Status: implemented and recurrence-validated 2026-10-08.** On 2026-10-08, the assistant again requested diff approval after the owner had already established a persistent no-per-diff/no-per-commit rule for this project.
 
 **Cause identified:** the current prompt also supplied a generic `AGENTS.md` rule requiring an exact `CMD:auto-approve` phrase before source edits. That conflicts with this project's standing authorization in `Task.md` and the always-loaded skill. The assistant treated the exact-phrase condition as controlling instead of resolving the conflict using the owner's later, explicit reminder that this project must not ask again. The authorization was already recorded; the failure was instruction-precedence handling, reinforced by treating a magic phrase as mandatory after the owner restated the project rule. A separate closeout cross-check is an independent review gate, not diff approval; do not conflate those two decisions.
 
@@ -32,7 +32,7 @@ For work the owner clearly requests within this project, do not pause for per-di
 
 **Implemented fix:** the conflicting rule is in `/home/tristan/.codex/AGENTS.md`, section `## Code Change Approval`, specifically the per-edit diff approval requirement and the `CMD:auto-approve` exception. A project-root `AGENTS.md` now scopes the exception to this repository and explains the preserved boundaries; the always-loaded skill is aligned. No global/host-managed file was edited.
 
-**Open verification:** the approved solution is in place, but persistence is not yet proven by a later task. This P0 remains open until an in-scope change proceeds without a repeated approval prompt.
+**Recurrence validation:** the owner then directed the current session to commit its changes and continue. The scoped work was committed as `e49b226` without another diff or commit approval request. This confirms the project-local rule was read and followed in a later task.
 
 **Acceptance:** a focused instruction-contract check confirms the project-root exception names the exact global file/rule and preserves external-action boundaries; display `TASK CLASS: **L3 — Basic Direct** | CURRENT MODEL: **<current model>** | WORKER MODEL/STATUS: **<configured model and honest status>** | WORKERS STARTED: **<actual count>**`; future in-scope work proceeds without repeated approval prompts while push/release/install/paid actions and genuinely out-of-scope work still stop. Keep recurrence validation open until a later task confirms the rule was followed.
 
@@ -70,7 +70,7 @@ Verified: the complete Agentflow script suite passed 1,442 tests with 29 environ
 
 **Installed model-handoff fix (2026-10-08):** After the owner explicitly required that current model not be unknown, synchronized the five trace runtime/skill/docs/test files to `/home/tristan/.agents/skills/agflow-frugal`. Source and installed hashes match. Installed focused tests pass 33/33. Previous installed copies are backed up at `/tmp/agflow-frugal-trace-model-sync.XGX6bM`. No release or push.
 
-**Persistent trace follow-up — Design Go `7d3f65a` (2026-10-08): implemented.** `godev trace enable` / `godev trace disable` control a checkout-local Codex prompt-hook setting stored only in ignored `.agentflow/.tmp/trace-mode.json`. It defaults off; enabling reports the approximate 40–70-token cost; toggle prompts only confirm; no extra model call. `godev trace` and `godev trace full` remain one-shot controls. Tracked `ag.json` and installed files were not changed. **Evidence:** RUN-035 records hook recovery + prompt-compression 39/39, alignment 14/14, syntax, diff, and ignored-path checks. Live UI rendering is not verified: Linux host lacks `/usr/bin/expect`. The implementation remains uncommitted because its source files contain pre-existing unrelated edits; only the approved feature's changes should be committed once safe staging boundaries are available. No release or publication.
+**Persistent trace follow-up — Design Go `7d3f65a` (2026-10-08): implemented and committed as `e49b226`.** `godev trace enable` / `godev trace disable` control a checkout-local Codex prompt-hook setting stored only in ignored `.agentflow/.tmp/trace-mode.json`. It defaults off; enabling reports the approximate 40–70-token cost; toggle prompts only confirm; no extra model call. `godev trace` and `godev trace full` remain one-shot controls. Tracked `ag.json` and installed files were not changed. **Evidence:** RUN-035 records hook recovery + prompt-compression 39/39, alignment 14/14, syntax, diff, and ignored-path checks; the full script suite then passed 1,458 tests with 29 environment-specific skips. Live UI rendering is not verified: this Linux host lacks `/usr/bin/expect`. No release, installed-copy update, or publication.
 
 ## P1 — Never guess the active model in trace reports — open
 

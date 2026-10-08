@@ -794,3 +794,11 @@ Implemented prompt-triggered godev status: compact hook context and skill guidan
 - A live PTY journey is unavailable in this Linux environment because `/usr/bin/expect` is absent; UI rendering is not directly verified. No installed-copy update, release, or push.
 - The GPT-5 current-model misattribution remains a separate open P1; this work does not claim live model attribution is fixed.
 - Source/docs/test changes remain uncommitted because the same files contain pre-existing changes from other work; preserve them and stage only after clean ownership boundaries are established.
+
+## [RUN-036] Event — 2026-10-08 17:33:21 +0800 (A-003)
+
+- Committed the staged Agentflow workflow and trace changes as `e49b226` (`Commit Agentflow workflow and trace updates`); no push. The untracked `.setup-checked` marker was excluded.
+- Full source suite passed 1,458 tests, 29 environment-specific skips, 0 failures; staged diff check passed.
+- The P0 repeated-approval issue is recurrence-validated: the owner requested commit and continuation, and the work proceeded without another diff/commit approval request.
+- Startup attempted to back up read-only `.codex/hooks.json` and stopped with EROFS; read-only owner inspection confirmed this session owns A-003. No hook file was changed.
+- Persistent trace mode is now committed; the active-model misattribution and proposed remote-session handoff remain open. PTY journey is unavailable on this Linux host.
