@@ -802,3 +802,12 @@ Implemented prompt-triggered godev status: compact hook context and skill guidan
 - The P0 repeated-approval issue is recurrence-validated: the owner requested commit and continuation, and the work proceeded without another diff/commit approval request.
 - Startup attempted to back up read-only `.codex/hooks.json` and stopped with EROFS; read-only owner inspection confirmed this session owns A-003. No hook file was changed.
 - Persistent trace mode is now committed; the active-model misattribution and proposed remote-session handoff remain open. PTY journey is unavailable on this Linux host.
+
+## [RUN-037] Event — 2026-10-08 17:36:12 +0800 (A-003)
+
+- The next queued P1, remote-session continuation, is now specified in `.agentflow/artifacts/A-003-remote-handoff/design.md` and committed as `ad4fa53`.
+- Design preserves one writer by snapshotting owner token and notebook hash before the serialized startup lock, then rejecting stale snapshots under lock; only explicit `godev` startup may transfer.
+- Same-session behavior and current Ask/path guards remain; verified native host identity is required. Unowned legacy or ambiguous cases retain explicit recovery.
+- No implementation source changed. The consequential source gate is exact `Design Go: ad4fa53`.
+- `Task.md` now records the design gate. The active-model misattribution issue remains open.
+- Canonical Agentflow startup still fails before intake because `.codex/hooks.json` cannot be backed up in this read-only environment (EROFS); read-only owner inspection confirms A-003 belongs to this session. No hook settings changed.
