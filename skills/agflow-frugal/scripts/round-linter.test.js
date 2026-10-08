@@ -555,6 +555,21 @@ node_test.test('timestamps_sane passes for a recent fixed timestamp', () => {
   node_assert.strictEqual(status_for(result, 'timestamps_sane').status, 'pass');
 });
 
+node_test.test('timestamps_sane allows old RUN history when the latest activity is recent', () => {
+  const devlog_text = `# → Ask / A-001\n\n+ work\n\n## [RUN-001] Event — 2026-08-14 09:00:00 +0800 (A-001)\n\n- Earlier progress.\n\n## [RUN-002] Event — 2026-08-15 11:00:00 +0800 (A-001)\n\n- Latest progress.\n`;
+  const result = lint_round({ devlog_text, now_ms: fixed_now_ms });
+
+  node_assert.strictEqual(status_for(result, 'timestamps_sane').status, 'pass');
+});
+
+node_test.test('timestamps_sane still fails when the latest activity is too old', () => {
+  const devlog_text = `# → Ask / A-001\n\n+ work\n\n## [RUN-001] Event — 2026-08-14 09:00:00 +0800 (A-001)\n\n- Latest progress.\n`;
+  const result = lint_round({ devlog_text, now_ms: fixed_now_ms });
+
+  node_assert.strictEqual(status_for(result, 'timestamps_sane').status, 'fail');
+  node_assert.match(status_for(result, 'timestamps_sane').detail, /too old/);
+});
+
 node_test.test('timestamps_sane fails for a timestamp far in the future', () => {
   const result = lint_round({
     devlog_text: devlog_with_stamp('2026-08-15 16:00:00 +0800'),
