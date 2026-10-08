@@ -508,6 +508,10 @@ Task.md now records the 128-test result and completed R8.3 evidence. R8 remains 
 
 + current model 跟 worker model 使用醒目顏色區分
 
++ godev trace
+
++ godev unknown current model is not acceptable
+
 ---
 
 ## [RUN-001] Event — 2026-10-08 10:49:51 +0800 (A-003)
@@ -580,3 +584,9 @@ Committed the scoped A-003 implementation and records as `7384d7f` (`Add prompt 
 - Trace input now highlights the pending L0–L5 class, current model (green marker), and worker model/status (purple marker); the final status must choose a verified L0–L5 class and reuse the hook model value. Routine trace output no longer repeats token-cost estimates.
 - Confirmed the active installed hook is older: it places model only in the UI warning, not assistant context. Development hook passes it through; installed files were left unchanged because no install update was explicitly requested.
 - OpenAI Hooks docs confirm the input `model` field is the active slug and `systemMessage` is a UI warning; they document no ANSI/text-color styling. Used colored square emoji markers. Focused tests passed 33/33, skill size 32,760 bytes, and `git diff --check` passed. No install update, push, or release.
+
+## [RUN-016] Event — 2026-10-08 12:10:17 +0800 (A-003)
+
+- Synchronized the current trace hook into the installed skill after the owner said current-model `unknown` is unacceptable. The old hook had the slug only in `systemMessage`; the updated hook passes it through `additionalContext` so the assistant can report it.
+- Backed up five prior installed files to `/tmp/agflow-frugal-trace-model-sync.XGX6bM`. The five installed/source SHA-256 pairs match exactly.
+- Installed recovery and compression suites passed 33/33. The hook submit already happened before this update; the next trace prompt will use the new hook. No release or push.
