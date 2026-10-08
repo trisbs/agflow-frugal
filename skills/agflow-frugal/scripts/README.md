@@ -27,6 +27,7 @@ not a general guarantee that code or a model claim is honest.
   the underlying completion evidence is present.
 
 - **`stop-hook.js`** — the independent final host check. It reads the real clock and repository push state, supplies transcript terminal output when a devlog was edited, and exits `2` only when a completed round fails the linter. An unfinished round produces repair warnings without blocking the active turn. A failure keeps the current round open for repair; it does not ask the host to create a new owner-looking Ask. `stop_hook_active` exits `0` so one correction cannot trap a session in a loop. A valid `AGENTFLOW_EXTERNAL_DELEGATE` marker bypasses owner-round checks; the launcher remains responsible for provenance and isolation.
+- On Codex `UserPromptSubmit`, exact `godev trace` or `godev trace full` also displays a cost/model/pending-state notice and adds one conditional final-status instruction. It estimates 40–70 extra tokens for the traced task, makes no extra model call, and leaves non-trace prompts unchanged.
 
 - **`ag-settings.js`** — the shared settings module and CLI. It resolves the
   adjacent configuration, rejects duplicate or malformed JSON, validates the
@@ -94,7 +95,9 @@ not a general guarantee that code or a model claim is honest.
 - **`routing-state.js`** and **`routing-runner.js`** — atomically persist
   resumable routing facts and expose `plan`, `run`, `resume`, and `inspect`.
   The owner-facing CLI is `agf route plan|run|resume|inspect`; it emits one
-  structured JSON result on stdout and diagnostics on stderr. Resume reloads
+  structured JSON result on stdout and diagnostics on stderr. Add `--trace`
+  or `--trace=full` to plan/run/resume for bounded, redacted routing details
+  on stderr; the flag is per invocation and writes no trace file. Resume reloads
   and validates current configuration and source identity, then continues at
   the next unaccepted stage without charging or launching accepted work again.
   `<workspace>/routing/<task-id>/state.json` is the only durable routing

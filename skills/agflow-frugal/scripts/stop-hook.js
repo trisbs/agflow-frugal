@@ -15,6 +15,17 @@ const { collect } = require('./completion-context');
 
 const external_delegate_marker_pattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 
+const trace_prompt = prompt => /^\s*\/?godev\s+trace(?:\s+full)?\s*$/iu.test(String(prompt || ''));
+
+const trace_notice = input => {
+  if (input.hook_event_name !== 'UserPromptSubmit' || !trace_prompt(input.prompt)) return {};
+  const model = require('./routing-trace.js').safe_atom(input.model);
+  return {
+    systemMessage: `godev trace enabled for this task: estimated extra model usage ~40–70 tokens (about 0.4–7% depending on task size); no extra model call. Current model=${model}; task class=pending assessment; worker=not started.`,
+    traceContext: `For this godev trace task, after existing assessment/routing (no extra model call), add one concise status line with the verified task class, current model, and worker model/status if started. Distinguish configured from observed; say unknown when not evidenced.`,
+  };
+};
+
 const read_stdin = () => {
   try {
     return node_fs.readFileSync(0, 'utf8');
@@ -89,13 +100,14 @@ const main = () => {
   if (!node_fs.existsSync(devlog_path)) return 0;
 
   if (input.hook_event_name === 'UserPromptSubmit') {
+    const trace = trace_notice(input);
     const current = parse_devlog(node_fs.readFileSync(devlog_path, 'utf8')).rounds.at(-1);
     if (!current || current.reply_text.trim()) {
       // Missing bookkeeping must not prevent the owner from requesting repair.
       // Leave history and ownership untouched; the agent receives the prompt.
-      process.stdout.write(JSON.stringify({ hookSpecificOutput: {
+      process.stdout.write(JSON.stringify({ ...(trace.systemMessage ? { systemMessage: trace.systemMessage } : {}), hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
-        additionalContext: `The user's instruction was not saved in ${notebook_path}: the notebook has no open Ask. Continue with the submitted request. Repair the missing Ask and capture the instruction before further notebook writes, preserving prior history and other sessions' ownership. Do not record this hook notice as user input.`,
+        additionalContext: `The user's instruction was not saved in ${notebook_path}: the notebook has no open Ask. Continue with the submitted request. Repair the missing Ask and capture the instruction before further notebook writes, preserving prior history and other sessions' ownership. Do not record this hook notice as user input.${trace.traceContext ? ` ${trace.traceContext}` : ''}`,
       } }) + '\n');
       return 0;
     }
@@ -110,9 +122,13 @@ const main = () => {
     } catch (error) {
       if (error.code !== 'AG_NOTEBOOK_OWNER') throw error;
       // Refuse unauthorized notebook writes, not delivery of the owner's request.
-      process.stdout.write(JSON.stringify({ hookSpecificOutput: {
+      const continuing_codex_task = active_host === 'codex' && /^\s*\/?godev(?:\s|$)/iu.test(String(input.prompt || '')) && /belongs to codex session/u.test(error.message);
+      const ownership_guidance = continuing_codex_task
+        ? ' Continue through the normal `agf start` workflow with this exact owner message; a `godev` start will atomically inherit the open Codex task and record the handoff without a separate authentication prompt. Do not edit owner metadata directly.'
+        : ' Do not mutate this notebook or adopt ownership without resolving the ownership conflict. Inspect ownership before notebook recovery.';
+      process.stdout.write(JSON.stringify({ ...(trace.systemMessage ? { systemMessage: trace.systemMessage } : {}), hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
-        additionalContext: `The user's instruction was not saved in ${notebook_path}: notebook ownership prevented capture. Continue with the submitted request, including any no-ag instruction. Do not mutate this notebook or adopt ownership without resolving the ownership conflict and establishing owner authorization. Inspect ownership before notebook recovery. Diagnostic: ${error.message}. Do not record this hook notice as user input.`,
+        additionalContext: `The user's instruction was not saved in ${notebook_path}: notebook ownership prevented capture. Continue with the submitted request, including any no-ag instruction.${ownership_guidance} Diagnostic: ${error.message}. Do not record this hook notice as user input.${trace.traceContext ? ` ${trace.traceContext}` : ''}`,
       } }) + '\n');
       return 0;
     }
@@ -121,9 +137,9 @@ const main = () => {
     const route_notice = fast_lane ? ` Fast-lane ${fast_lane.state}: work directly without AG, delegation, new streams, external review, or pipeline approval/artifact requirements. Keep host self-review, necessary tests, trackers, timed WIP checkpoints, detailed reports, and integrity checks. ${fast_lane.state === 'pending' ? 'Wait for the task; leave this Ask open without a Reply or closeout.' : 'This applies through this task’s closeout, then expires.'}` : '';
     const capture_state = result.inserted ? 'was saved' : 'was already present; no duplicate was written'
     const session_notice = input.session_id ? ` Hook session: ${input.session_id}.` : ''
-    process.stdout.write(JSON.stringify({ hookSpecificOutput: {
+    process.stdout.write(JSON.stringify({ ...(trace.systemMessage ? { systemMessage: trace.systemMessage } : {}), hookSpecificOutput: {
       hookEventName: 'UserPromptSubmit',
-      additionalContext: `The user's instruction ${capture_state} in ${notebook_path}, ${result.ask}.${session_notice} Read the current Ask and address all its instructions together. Do not record this hook notice as user input.${route_notice}`,
+      additionalContext: `The user's instruction ${capture_state} in ${notebook_path}, ${result.ask}.${session_notice} Read the current Ask and address all its instructions together. Do not record this hook notice as user input.${route_notice}${trace.traceContext ? ` ${trace.traceContext}` : ''}`,
     } }) + '\n');
     return 0;
   }

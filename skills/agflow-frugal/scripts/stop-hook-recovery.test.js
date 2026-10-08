@@ -9,6 +9,51 @@ const { test } = require('node:test');
 
 const hook = path.join(__dirname, 'stop-hook.js');
 
+test('Codex trace prompt displays bounded cost and adds one conditional status instruction', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agf-prompt-trace-'));
+  const file = path.join(root, '.agentflow/devlog.md');
+  fs.mkdirSync(path.dirname(file));
+  fs.writeFileSync(file, '# → Ask / A-044\n\n+ existing request\n');
+  const env = { ...process.env };
+  for (const name of ['AGENTFLOW_EXTERNAL_DELEGATE', 'CODEX_THREAD_ID', 'CODEX_SESSION_ID', 'CLAUDE_SESSION_ID', 'AGENTFLOW_SESSION_ID', 'CLAUDE_PROJECT_DIR']) delete env[name];
+
+  const invoke = prompt => spawnSync(process.execPath, [hook, '--host', 'codex'], {
+    input: JSON.stringify({ cwd: root, hook_event_name: 'UserPromptSubmit', session_id: 'trace-session', turn_id: prompt, model: 'gpt-6.1-sol', prompt }),
+    env, cwd: root, encoding: 'utf8',
+  });
+  const traced = invoke('godev trace full');
+  assert.equal(traced.status, 0, traced.stderr);
+  const trace_output = JSON.parse(traced.stdout);
+  assert.match(trace_output.systemMessage, /estimated extra model usage ~40–70 tokens/);
+  assert.match(trace_output.systemMessage, /no extra model call/);
+  assert.match(trace_output.systemMessage, /Current model=gpt-6.1-sol; task class=pending assessment; worker=not started/);
+  assert.match(trace_output.hookSpecificOutput.additionalContext, /one concise status line/);
+  assert.match(trace_output.hookSpecificOutput.additionalContext, /configured from observed/);
+
+  const ordinary = invoke('godev continue');
+  assert.equal(ordinary.status, 0, ordinary.stderr);
+  const ordinary_output = JSON.parse(ordinary.stdout);
+  assert.equal(Object.hasOwn(ordinary_output, 'systemMessage'), false);
+  assert.doesNotMatch(ordinary_output.hookSpecificOutput.additionalContext, /trace task/);
+});
+
+test('Codex trace notice redacts secret-shaped model identifiers', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agf-prompt-trace-redact-'));
+  const file = path.join(root, '.agentflow/devlog.md');
+  fs.mkdirSync(path.dirname(file));
+  fs.writeFileSync(file, '# → Ask / A-044\n\n+ existing request\n');
+  const env = { ...process.env };
+  for (const name of ['AGENTFLOW_EXTERNAL_DELEGATE', 'CODEX_THREAD_ID', 'CODEX_SESSION_ID', 'CLAUDE_SESSION_ID', 'AGENTFLOW_SESSION_ID', 'CLAUDE_PROJECT_DIR']) delete env[name];
+  const result = spawnSync(process.execPath, [hook, '--host', 'codex'], {
+    input: JSON.stringify({ cwd: root, hook_event_name: 'UserPromptSubmit', session_id: 'trace-session', turn_id: 'redact', model: 'access_token-secret', prompt: 'godev trace' }),
+    env, cwd: root, encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.match(output.systemMessage, /Current model=unknown/);
+  assert.doesNotMatch(output.systemMessage, /access_token-secret/);
+});
+
 for (const host of ['codex', 'claude']) {
   for (const [label, notebook] of [
     ['completed round', '# → Ask / A-042\n\n+ previous request\n\n# ← Reply / A-042\n\nPrevious answer.\n'],

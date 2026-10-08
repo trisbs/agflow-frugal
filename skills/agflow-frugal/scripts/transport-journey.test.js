@@ -6,27 +6,68 @@ const os = require('node:os')
 const path = require('node:path')
 const { spawnSync, execFileSync } = require('node:child_process')
 const test = require('node:test')
+const ag_settings = require('./ag-settings.js')
 
 const wrapper = `const fs=require('node:fs'),cp=require('node:child_process');
 if(!process.stdin.isTTY||!process.stdout.isTTY)process.exit(90);
 process.stdout.write('Terminal: '+cp.spawnSync('tty',[],{stdio:[0,'pipe','pipe'],encoding:'utf8'}).stdout);
 process.stdout.write('Visible input: '+process.env.AGF_JOURNEY_INPUT+'\\n');
 const r=cp.spawnSync(process.execPath,JSON.parse(process.env.AGF_JOURNEY_ARGS),{input:process.env.AGF_JOURNEY_INPUT,encoding:'utf8'});
-process.stdout.write(r.stdout||'');process.stderr.write(r.stderr||'');
+if(process.env.AGF_JOURNEY_CHANNELS==='1')process.stdout.write('CHILD_STDOUT\\n'+(r.stdout||'')+'\\nCHILD_STDERR\\n'+(r.stderr||''));
+else{process.stdout.write(r.stdout||'');process.stderr.write(r.stderr||'');}
 process.stdout.write('\\nProcess exit: '+r.status+'\\n');process.exit(r.status??91);`
 const expect_script = 'set timeout 30\nlog_user 1\nspawn $env(AGF_JOURNEY_NODE) -e $env(AGF_JOURNEY_WRAPPER)\nexpect eof\nset result [wait]\nexit [lindex $result 3]'
-const terminal = (root, script, args, input = '') => {
+const terminal = (root, script, args, input = '', env_overrides = {}) => {
   const result = spawnSync('/usr/bin/expect', ['-c', expect_script], { cwd: root, encoding: 'utf8', env: {
     ...process.env, CODEX_THREAD_ID: 'inherited-codex', CLAUDE_SESSION_ID: 'inherited-claude',
     AGENTFLOW_SESSION_ID: 'portable-terminal-session',
     AGF_JOURNEY_NODE: process.execPath, AGF_JOURNEY_WRAPPER: wrapper,
     AGF_JOURNEY_ARGS: JSON.stringify(script === null ? args : [path.join(__dirname, script), ...args]), AGF_JOURNEY_INPUT: input,
+    ...env_overrides,
   } })
   assert.match(result.stdout, /Terminal: \/dev\/(?:tty|pts\/)/)
   assert.match(result.stdout, /Visible input:/)
   assert.match(result.stdout, new RegExp(`Process exit: ${result.status}`))
   return result
 }
+
+test('prompt-enabled route trace reports observed routing facts in a real terminal without persisting trace state', () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agf-trace-pty-')))
+  try {
+    ag_settings.initialize_project({ repo_root: root, active_host: 'codex' })
+    const facts = {
+      admission_facts: {
+        mechanical: true,
+        requirement_clear: true,
+        scope_known: true,
+        reversible: true,
+        deterministic_verification: true,
+      },
+      task: {
+        task_id: 'trace-pty',
+        role: 'implementation',
+        executor_choice: { kind: 'host', reason: 'Use this terminal host' },
+        brief: { goal: 'Verify trace output' },
+        work_boundary: ['example.txt'],
+        interactive_host: false,
+      },
+      capabilities: { host: { candidate_id: 'current-host', available: true } },
+    }
+    const traced = terminal(root, 'agf.js', ['route', 'plan', '--facts-stdin', '--trace'], JSON.stringify(facts), { CLAUDE_SESSION_ID: '', AGF_JOURNEY_CHANNELS: '1' })
+    assert.equal(traced.status, 0, traced.stdout + traced.stderr)
+    const [child_stdout, child_stderr] = traced.stdout.split(/CHILD_STDERR\r?\n/u)
+    assert.match(child_stdout, /CHILD_STDOUT\r?\n\{\r?\n  "status": "selected"/u)
+    assert.doesNotMatch(child_stdout, /\[agf trace\]/)
+    assert.match(child_stderr, /\[agf trace\] primary \| tier=cheap \| selected=host\/current-host \| model=unknown \| effort=unknown/)
+    assert.equal(fs.existsSync(path.join(root, '.agentflow', 'routing')), false)
+
+    const quiet = terminal(root, 'agf.js', ['route', 'plan', '--facts-stdin'], JSON.stringify(facts), { CLAUDE_SESSION_ID: '' })
+    assert.equal(quiet.status, 0, quiet.stdout + quiet.stderr)
+    assert.doesNotMatch(quiet.stdout, /\[agf trace\]/)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
 
 for (const git_mode of [true, false]) test(`real terminal portable host, policy changes, pending handoff and closeout in ${git_mode ? 'Git' : 'plain'} folder`, () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agf-transport-pty-')))

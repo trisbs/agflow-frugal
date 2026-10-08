@@ -17,6 +17,10 @@ For releases, update version and heading together: major/minor/patch for breakin
 
 Incident citations explain failures. Approved redesigns may replace obsolete remedies; preserve hazard checks and history.
 
+## Persistent owner authorization
+
+- Requested project work needs no diff/commit approval; show diffs. Push, release, paid calls, and installed updates need explicit requests. Keep in `Task.md`.
+
 ## Start here
 
 Already-launched looper workers follow their supplied plan directly, not this host startup/closeout protocol.
@@ -31,7 +35,7 @@ Already-launched looper workers follow their supplied plan directly, not this ho
 
    Startup and every notebook writer enforce one session owner for the active Ask. Codex uses agreeing `CODEX_THREAD_ID`/`CODEX_SESSION_ID` values; Claude uses its hook session or `CLAUDE_CODE_SESSION_ID` (with `CLAUDE_SESSION_ID` retained for compatibility). When the current native host supplies no shell identity, retain its actual session ID through `--session <id>`. Conflicting identity refuses before mutation. A foreign or unknown owner leaves the notebook unchanged even with `streams: off`. Before a direct notebook edit, use `agf owner inspect --notebook <target-doc>` and confirm the recorded host/session and Ask match this session. Generic host names and dirty files never establish ownership.
 
-   On explicit startup in a linked stream worktree, a populated first Ask can also be claimed without confirmation when there is no owner record, no progress or Reply, and Git HEAD contains the same notebook with only its single A-001 Ask still empty. Startup verifies that everything through the Ask heading is unchanged. Other unowned populated notebooks still require adoption. Successful closeout releases the completed round; a fresh session can claim the next empty Ask. If the owner populated that next Ask before activation, their request to activate/resume authorizes startup to claim it when its immediate sequential predecessor has a valid released owner and completed Reply. Do not ask for a second confirmation. Ordinary hooks and writers do not infer this authorization. To recover a legacy populated Ask without that release proof or hand off an actively owned Ask, inspect with `agf owner inspect --notebook <target-doc>`, then use `agf owner adopt --notebook <target-doc> --ask <A-NNN> --expect <owner-token|unowned> --sha256 <notebook-hash> --host <host> --session <id>` after the owner authorized taking over that round. Existing authorization suffices; use the exact inspected token, Ask and hash, and refuse changed preconditions. Never expire an owner from its age or a helper PID.
+   On explicit startup in a linked stream worktree, an unchanged populated first Ask can be claimed without confirmation only when no owner, progress, or Reply exists and Git HEAD has the same notebook with its single A-001 Ask empty. Other unowned populated notebooks require adoption. Closeout releases the completed round; startup may claim the next empty Ask, or an owner-populated next Ask whose immediate predecessor has a valid released owner and completed Reply. Hooks and writers do not infer this authorization. For Codex, an explicit `godev` startup on an actively owned open Ask authorizes startup to transfer ownership, save the prompt, and fence the prior session without separate authentication. A stale concurrent claimant fails its token/hash precondition; hooks never transfer ownership. To recover a legacy populated Ask or hand off on another host, inspect with `agf owner inspect`, then use `agf owner adopt` with the exact authorized Ask, owner token, notebook hash, host, and session. Refuse changed preconditions. Never expire owners by age or helper PID.
 
 3. Run it once. Do not precede startup with `pwd`, file inventories, Git status/log, or instruction discovery; the host already supplied the repository and skill paths. Use the returned `local_timestamp`, `next_run_id`, configuration, Git, Ask, and changed paths; rediscover only on error. After startup, inspect only files needed for the current Ask; do not inventory directories, search parent directories, reread configuration, or probe runners for a standalone text-file request. Such a non-operational content artifact is direct host work: after the reference batch below, write the artifact, read the saved file once to verify it, inspect changed paths, then use the documented `agf close --manifest-stdin` example. A Write success/context hint does not replace the required saved-file read. Do not add a failing-test cycle, repeat content verification, or explore workflow source/tests to anticipate a closeout error. Diagnose an actual unresolved failure only after trying the documented close command.
 
@@ -70,6 +74,8 @@ The Plus budget permits one external worker, delegation depth one, no parallel w
 ## Every message after startup
 
 Before answering or acting, save each submitted message in the current Ask, including diagnostic questions after interruption. Without a capture notice, run `notebook-write.js append-input --notebook <target-doc> --input-stdin` with the exact message. Use startup's repository-relative notebook value unchanged. Format paragraphs as `+ <user message>` with blank lines and indented continuations protecting pasted headings. No capture comments or added blockquotes. The loaded `UserPromptSubmit` hook captures automatically; hookless hosts add `--host <safe-id>` to that manual call. Queued text, tool output and hook notices are not owner submissions.
+
+`godev trace [full]`: Codex shows estimated +40–70 tokens, model, pending class/worker; after assessment, emit one verified class/model/worker line. No extra call or saved setting; CLI: `agf route plan|run|resume --trace[=full]`. Unknown facts stay unknown.
 
 Answer the entire current Ask in its saved Reply; question-only turns also close with `agf close --manifest-stdin`. A diagnostic follow-up does not cancel the unfinished task or require fresh permission for authorized work; resume it and close when its existing gates pass, unless the owner cancels or replaces it. When explaining commands, compare the loaded rule with actual output; distinguish required checks, your mistakes, and genuine instruction gaps.
 
@@ -164,7 +170,7 @@ Read `references/progress.md` before decomposing work, recording a material resu
 
 - Read `references/closeout.md` in full before deciding review requirements, requesting review, preparing the final Reply, or closing a round. It owns the exact manifest, STATUS, review classification and waivers, host gate, and record-only completion checks. Do not load it for activation alone.
 
-- In a Git repository, commit each meaningful unit and push when a remote exists. Before the first pushed commit, fetch and inspect `HEAD..origin/<branch>`. Never force-push. Preserve unrelated changes and never stash, clean, revert, or commit another session's work.
+- Commit scoped authorized units without repeated approval. Push requires an explicit request; before pushing, inspect `HEAD..origin/<branch>`. Never force-push or disturb unrelated/other-session work.
 
 - After successful Reply, closeout, and required push, use the successful close result’s `display.text`: with `inline-reply: off` (default), output only `<target-doc path relative to the main checkout root> updated`; with `on`, display the saved Reply. Always keep the substantive answer in the notebook. During work, output short status updates.
 

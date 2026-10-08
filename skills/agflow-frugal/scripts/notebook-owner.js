@@ -157,6 +157,11 @@ const read = info => {
   let same_target = false;
   try { same_target = typeof record?.notebook === 'string' && same_notebook(info.root, record.notebook, info.notebook); } catch {}
   if (!record || record.version !== 1 || typeof record.root !== 'string' || path_key(filesystem_spelling(record.root)) !== path_key(info.root) || !same_target || !/^A-\d{3}$/u.test(record.ask) || !/^[a-z0-9][a-z0-9_-]{0,127}$/u.test(record.host) || !safe_id(record.session) || !/^[a-f0-9]{32}$/u.test(record.token) || !['active', 'released', 'moved'].includes(record.state)) fail('owner record is malformed or belongs to another notebook');
+  if (record.handoffs !== undefined && (!Array.isArray(record.handoffs) || record.handoffs.length > 4 || record.handoffs.some(event =>
+    !event || !['godev-start', 'owner-authorized-adopt'].includes(event.trigger)
+      || !Number.isFinite(Date.parse(event.at))
+      || !event.from || !/^[a-z0-9][a-z0-9_-]{0,127}$/u.test(event.from.host) || !safe_id(event.from.session)
+      || !event.to || !/^[a-z0-9][a-z0-9_-]{0,127}$/u.test(event.to.host) || !safe_id(event.to.session)))) fail('owner handoff history is malformed');
   if (record.state === 'moved') safe_path(info.root, record.moved_to);
   return record;
 };
@@ -188,7 +193,7 @@ const first_stream_request = (info, text, parsed) => {
   return before !== null && after !== null && result.stdout.slice(0, before.body_start) === text.slice(0, after.body_start);
 };
 
-const guard = ({ root = process.cwd(), notebook, text, host, session, ask, workspace, allow_missing = false, allow_closed = false, resume_unclaimed = false } = {}) => {
+const guard = ({ root = process.cwd(), notebook, text, host, session, ask, workspace, allow_missing = false, allow_closed = false, resume_unclaimed = false, resume_active = false } = {}) => {
   const who = identity({ host, session });
   const info = location({ root, notebook, workspace });
   const stream = linked_worktree(info.root);
@@ -210,6 +215,15 @@ const guard = ({ root = process.cwd(), notebook, text, host, session, ask, works
   const closed_target = allow_closed && parsed.some(round => round.id === target && round.reply_text.trim());
   if (record && record.ask === target && (record.state === 'active' || closed_target)) {
     if (record.host !== who.host || record.session !== who.session) {
+      if (resume_active === true && who.host === 'codex' && record.host === who.host && record.state === 'active' && target === current.id && !current.reply_text.trim()) {
+        const transferred = transfer({
+          root: info.root, notebook: info.notebook, host: who.host, session: who.session,
+          ask: current.id, expected: record.token,
+          sha256: crypto.createHash('sha256').update(text).digest('hex'),
+          reason: 'godev-start',
+        });
+        return { ...info, record: transferred.owner, identity: who, handoff: { from: { host: record.host, session: record.session }, to: { host: who.host, session: who.session } } };
+      }
       const mismatches = [];
       if (record.host !== who.host) mismatches.push(`host ID mismatch (owner ${record.host}, writer ${who.host})`);
       mismatches.push(record.session === who.session ? 'session ID matches' : 'session ID mismatch');
@@ -269,14 +283,22 @@ const inspect = ({ root = process.cwd(), notebook }) => {
   return { notebook: info.notebook, ask: rounds(snapshot.text).at(-1)?.id, sha256: snapshot.hash, owner: read(info) };
 };
 
-const transfer = ({ root = process.cwd(), notebook, host, session, ask, expected, sha256 }) => {
+const transfer = ({ root = process.cwd(), notebook, host, session, ask, expected, sha256, reason = 'owner-authorized-adopt' }) => {
+  if (!['godev-start', 'owner-authorized-adopt'].includes(reason)) fail('handoff reason is invalid');
   const who = identity({ host, session });
   const info = location({ root, notebook });
   const snapshot = writer().read_regular_file(safe_path(info.root, info.notebook), 'notebook');
   const record = read(info);
   const current = rounds(snapshot.text).at(-1);
   if (!current || current.id !== ask || current.reply_text.trim() || snapshot.hash !== sha256 || (record?.token || 'unowned') !== expected) fail('adoption precondition changed; inspect the current owner, Ask and notebook hash again');
-  const next = { version: 1, root: info.root, notebook: info.notebook, ask, ...who, token: crypto.randomBytes(16).toString('hex'), state: 'active' };
+  const handoff = record ? {
+    at: new Date().toISOString(),
+    from: { host: record.host, session: record.session },
+    to: { host: who.host, session: who.session },
+    trigger: reason,
+  } : null;
+  const handoffs = handoff ? [...(record.handoffs || []), handoff].slice(-4) : record?.handoffs;
+  const next = { version: 1, root: info.root, notebook: info.notebook, ask, ...who, token: crypto.randomBytes(16).toString('hex'), state: 'active', ...(handoffs?.length ? { handoffs } : {}) };
   save(info, next);
   return { notebook: info.notebook, ask, owner: next };
 };

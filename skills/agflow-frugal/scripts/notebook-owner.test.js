@@ -8,7 +8,7 @@ const test = require('node:test');
 const { spawnSync, spawn } = require('node:child_process');
 const writer = require('./notebook-write');
 const notebook = '.agentflow/devlog.md';
-const ids = { A: '11111111-1111-4111-8111-111111111111', B: '22222222-2222-4222-8222-222222222222' };
+const ids = { A: '11111111-1111-4111-8111-111111111111', B: '22222222-2222-4222-8222-222222222222', C: '33333333-3333-4333-8333-333333333333' };
 const environment = id => ({ ...process.env, CODEX_THREAD_ID: ids[id], CODEX_SESSION_ID: ids[id], CLAUDE_SESSION_ID: '', CLAUDE_PROJECT_DIR: '', AGENTFLOW_SESSION_ID: '' });
 const command = (root, script, args, input, id = 'A') => spawnSync(process.execPath, [path.join(__dirname, script), ...args], { cwd: root, env: environment(id), input, encoding: 'utf8' });
 const start = (root, id, input = `request ${id}`) => command(root, 'agf.js', ['start', '--repo', root, '--host', 'codex', '--message-stdin', '--json'], input, id);
@@ -54,7 +54,70 @@ for (const git of [true, false]) test(`foreign startup and all progress writers 
   assert.equal(same.status, 0, same.stderr);
   const captured = command(root, 'notebook-write.js', ['append-input', '--notebook', notebook, '--host', 'codex', '--input-stdin'], 'same-session follow-up');
   assert.equal(captured.status, 0, captured.stderr);
+  const second_followup = command(root, 'notebook-write.js', ['append-input', '--notebook', notebook, '--host', 'codex', '--input-stdin'], 'same-session second follow-up');
+  assert.equal(second_followup.status, 0, second_followup.stderr);
   assert.match(read(root), /same-session follow-up/u);
+  assert.match(read(root), /same-session second follow-up/u);
+  assert.equal(require('./notebook-owner').inspect({ root, notebook }).owner.session, ids.A);
+});
+
+test('Codex godev startup automatically inherits an active Ask and records the handoff', () => {
+  const root = fixture(false);
+  const owner = require('./notebook-owner');
+  const hook_before = state(root);
+  const hook = command(root, 'stop-hook.js', ['--host', 'codex'], JSON.stringify({
+    cwd: root, hook_event_name: 'UserPromptSubmit', session_id: ids.B, turn_id: 'continue-1', prompt: 'godev continue the current task',
+  }), 'B');
+  assert.equal(hook.status, 0, hook.stderr);
+  assert.match(JSON.parse(hook.stdout).hookSpecificOutput.additionalContext, /normal `agf start` workflow.*atomically inherit.*without a separate authentication prompt/u);
+  assert.deepEqual(state(root), hook_before, 'the prompt hook must not transfer ownership itself');
+
+  const continuation = start(root, 'B', 'godev continue the current task');
+  assert.equal(continuation.status, 0, continuation.stderr);
+  const result = JSON.parse(continuation.stdout);
+  assert.deepEqual(result.message.owner_handoff, {
+    from: { host: 'codex', session: ids.A },
+    to: { host: 'codex', session: ids.B },
+  });
+  const after = owner.inspect({ root, notebook });
+  assert.equal(after.owner.session, ids.B);
+  assert.equal(after.owner.handoffs.at(-1).trigger, 'godev-start');
+  assert.equal(after.owner.handoffs.at(-1).from.session, ids.A);
+  assert.equal(after.owner.handoffs.at(-1).to.session, ids.B);
+  assert.match(read(root), /godev continue the current task/u);
+
+  const stale_writer = command(root, 'notebook-write.js', ['append-input', '--notebook', notebook, '--host', 'codex', '--input-stdin'], 'old session must be fenced', 'A');
+  assert.notEqual(stale_writer.status, 0);
+  assert.match(stale_writer.stderr, /belongs to codex session/u);
+  assert.doesNotMatch(read(root), /old session must be fenced/u);
+
+  const before_unmarked = state(root);
+  const unmarked = start(root, 'C', 'please continue without the godev command');
+  assert.notEqual(unmarked.status, 0);
+  assert.deepEqual(state(root), before_unmarked);
+});
+
+test('concurrent owner transfers using one inspected token accept only one claimant', async () => {
+  const root = fixture(false);
+  const owner = require('./notebook-owner');
+  const inspected = owner.inspect({ root, notebook });
+  const run = id => new Promise(resolve => {
+    const child = spawn(process.execPath, [path.join(__dirname, 'agf.js'), 'owner', 'adopt', '--notebook', notebook,
+      '--host', 'codex', '--session', ids[id], '--ask', inspected.ask, '--expect', inspected.owner.token, '--sha256', inspected.sha256], {
+      cwd: root, env: environment(id), stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', chunk => { stdout += chunk; });
+    child.stderr.on('data', chunk => { stderr += chunk; });
+    child.on('exit', code => resolve({ id, code, stdout, stderr }));
+  });
+  const results = await Promise.all(['B', 'C'].map(run));
+  assert.equal(results.filter(result => result.code === 0).length, 1, JSON.stringify(results));
+  const winner = results.find(result => result.code === 0).id;
+  const after = owner.inspect({ root, notebook });
+  assert.equal(after.owner.session, ids[winner]);
+  assert.equal(after.owner.handoffs.length, 1);
 });
 
 test('foreign prompt reaches the agent without startup or receipt mutation', () => {

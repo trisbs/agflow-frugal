@@ -60,7 +60,7 @@ Keep the existing links. Let me review the result before uploading it.
 
 Small tasks can stay simple. `fast-lane` keeps one task with the main assistant and skips separate review while retaining necessary checks and self-review. `cross-check` requests a separate review of finished work; `review-policy: prefer-independent` permits a clearly labelled host review only after separate-review unavailability, while `require-independent` stays strict. `ag` requests the full development process when the project’s `allow-ag` setting permits it.
 
-The notebook keeps the conversation, so a fresh session can resume an unfinished request with `godev`. With Git, Agentflow normally commits completed work and pushes when a remote exists; tell it when you want local work only.
+The notebook keeps the conversation, so a fresh Codex session can resume an unfinished request with `godev` without a separate authentication or handoff confirmation. Startup atomically transfers the open task's single-writer lease and records the previous and new session; simultaneous stale claims cannot both write. With Git, Agentflow normally commits completed work and pushes when a remote exists; tell it when you want local work only.
 
 ## Check installation
 

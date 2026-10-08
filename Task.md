@@ -16,11 +16,41 @@ The escalation rule is:
 
 - Do not automatically install, update, replace, or synchronize the user's installed Agentflow version as part of project startup, development, testing, or release preparation. Changes to this repository do not authorize changes to an installed copy.
 - Update the installed version only after the user explicitly asks for that update. Until then, leave installed skill files and installation paths unchanged.
+
+## Persistent owner authorization — do not remove
+
+For work the owner clearly requests within this project, do not pause for per-diff or per-commit approval solely because a general skill asks for review. Show diffs and commit scoped authorized work without asking again. This does not authorize push, release/publication, paid provider calls, or installed-copy updates unless the owner explicitly requests that action. The always-loaded `skills/agflow-frugal/SKILL.md` is the operational source; retain this note as the durable project record.
 - This is a persistent owner preference, not a temporary release checklist item. Preserve it when reorganizing or pruning `Task.md`; do not delete or weaken it.
 
 ## P0 — Resolve nested Git subprocess `EPERM` before release — fixed for reproduced case
 
 **Status: the reproduced nested-Git failure is fixed and R8 regression checks pass; release still requires Phase 10 authorization and delivery checks.** The immediate cause was an empty read-only `/tmp/.git` sentinel exposed by this Codex environment. `repository-state.js` treated every ancestor `.git` directory as repository metadata, so plain-folder checks unnecessarily invoked Git; deeper test/PTY process trees then produced `EPERM`. It now ignores only empty `.git` directories above the requested project root. An empty `.git` at the requested root, non-empty/broken repository metadata, and environment overrides still fail closed. Minimal reproduction: a plain directory below an empty ancestor `.git` previously returned `state: error`; after the change it returns `state: plain` without invoking Git. The focused regression, affected closeout/hook/PTY suites, and complete Agentflow script suite pass outside the restricted process sandbox. Do not publish or release without the separate Phase 10 request.
+
+## P1 — Keep Codex ownership continuous across session changes — implemented 2026-10-08
+
+**Status: both continuity paths are implemented and verified.** A-003 had an owner session ID different from the active Codex session ID. The local hook/notebook record cannot establish why the host supplied a different ID, so do not claim that the user opened another conversation. Same-session startup and prompt capture continue using one exact Codex ID. If that ID changes after `clear` or session replacement, a `godev`-prefixed startup request now expresses continuation intent: Agentflow atomically transfers the active open Ask's single-writer owner, records the previous and new IDs, and saves the submitted message without a separate authentication or handoff prompt. Hooks never transfer ownership themselves; a stale owner is fenced from later writes, and a stale concurrent transfer loses its token/hash precondition.
+
+Verified: the complete Agentflow script suite passed 1,442 tests with 29 environment-specific skips outside the restricted process sandbox; the focused empty-ancestor `.git` `EPERM` regression also passed. The always-loaded skill now fits the 32 KiB budget (32,371 bytes), and its prompt-compression test passes. No installed copy was changed and no release or publish occurred.
+
+## P1 — Simplify unfinished-work handoff for remote sessions — proposed
+
+**Reason:** the current session-owner flow adds host/session identity, owner inspection, token/hash preconditions, and explicit adoption steps that make it cumbersome for a new or remote session to continue ordinary unfinished work. The upstream Agentflow model is simpler: recover from the shared notebook's STATUS and last round, while keeping one writer per notebook.
+
+**Status: proposed next task, not implemented.** The current automatic handoff is Codex-only; other hosts still need the explicit adoption path. Compare the upstream resume rules with the current implementation and redesign for low-friction continuation. Prefer improving the original notebook-based resume model over requiring authentication or a separate adoption command for routine continuation. Preserve protection against simultaneous writes and make the active writer unambiguous; do not treat unrelated sessions as concurrent writers merely because their session IDs differ. Keep any explicit takeover procedure only for genuine conflicts or ambiguous ownership.
+
+**Acceptance:** a fresh/remote session can resume an unfinished Ask by reading the canonical notebook and following its current STATUS/last round, without owner authentication or manual token/hash copying; the previous writer is clearly prevented from concurrently changing the same Ask; ordinary same-session continuation remains unchanged; competing simultaneous writers are deterministically handled; tests cover fresh-session resume, genuine concurrent-write conflict, and recovery after interruption. Do not update the installed copy automatically.
+
+## P1 — Prompt-enabled per-run routing trace — completed 2026-10-08
+
+**Owner request:** `godev trace` enables a trace for one current run; `godev trace full` opts into bounded detail. Do not save a preference or trace file, replay prompts, or make another model call.
+
+**Scope:** `agf route plan|run|resume` accepts `--trace` or `--trace=full` and writes concise trace lines to stderr while preserving the one-JSON-result stdout contract. The Codex prompt hook also displays the active model and pending classification/worker state immediately, then asks for one compact final line after the existing assessment. No extra model call or persisted preference. Expected added usage is approximately 40–70 tokens per traced task (about 4–7% at 1,000 baseline tokens, 1.3–2.3% at 3,000, or 0.4–0.7% at 10,000); worker execution cost is excluded. Distinguish configured from observed model; unknown host/model/tool facts stay unknown. Never print prompts, raw provider output/arguments, environment values, credentials, or arbitrary error details.
+
+**Completed:** `godev trace` and `godev trace full` trigger the prompt-hook notice with estimated cost, active model, and pending task/worker fields; the existing assessment supplies the final verified task class and worker model/status in one concise line. Route stderr tracing keeps JSON stdout unchanged, reveals observed executor/model facts only, and writes no trace state. No extra model call or prompt replay was added.
+
+**Evidence:** the complete development script suite passed 1,448 tests with 29 environment-specific skips. After the final trace-label clarification, focused source tests passed (trace 5/5, PTY 1/1, prompt-control/compression 13/13); the installed copy passed the same final trace 5/5 and PTY 1/1 checks, plus prompt-control/compression 13/13. The earlier installed targeted suite passed 260 tests with three skips. All eleven changed skill files were backed up and their source/install SHA-256 values match. Backup: `/tmp/agflow-frugal-trace-backup.8Z3bzG`. No installed-only file was removed; no release or publication occurred.
+
+**Prompt-display follow-up (2026-10-08):** Exact Codex prompts `godev trace` and `godev trace full` now surface a hook `systemMessage` with current model, pending class/worker state, and estimated added usage (~40–70 tokens; no additional model call). The conditional instruction requests one concise final line after the existing assessment, distinguishing configured from observed values. Non-trace prompts receive no trace notice; secret-shaped model identifiers become `unknown`. Source recovery tests passed 20/20, prompt-compression passed 13/13, and the always-loaded skill is 32,762 bytes (limit 32,768). Installed equivalents passed 33/33; synchronized `SKILL.md`, `stop-hook.js`, `scripts/README.md`, and the two focused test files with matching source/install hashes. Previous installed copies are backed up under `/tmp/agflow-frugal-trace-hook-backup.od7myA`. No live Codex UI journey was available, so visible host rendering is not directly verified; the hook JSON contract is tested.
 
 ### Upstream comparison: original Agentflow
 
@@ -108,9 +138,11 @@ Classification is domain-neutral and conservative. Explicit metadata may raise a
 
 The deterministic Usage Policy, coordinator, lifecycle, version-1 contracts, frozen brief digests, redacted atomic state, resume identity checks, profile-backed CLI planning, usage budgets, settled-failure handling, and external transport attribution are implemented.
 
-Current status as of 2026-10-07: R1-R7 have focused contract coverage, and R8 remains in progress. The routing, external-runner, and provider-adapter regression passed 96/96; focused provider-adapter tests passed 4/4. Current Codex CLI 0.160.1 and Claude Code 2.1.266 help output confirms the adapter flags are recognized; no authenticated provider call was made. R8.4 validates a version-1 recipe's provider family and exact configured cheap-tier model/effort, confirms a cheap-tier plan before warning or launch, applies provider model/effort flags, parses structured output, and retains unknown actual attribution when output does not expose it. The empty-ancestor `.git` false-positive is fixed; the affected repository-state, stop-hook, recovery, and PTY suites pass 76 tests with one filesystem-specific skip. The complete suite now runs but has separate non-EPERM failures in existing guide and round-linter assertions; R8 is not complete. The actual installed shortcut was unavailable in this shell and has not been verified. The routing work is still **not production-ready**.
+Current status as of 2026-10-08: R1-R8 acceptance is complete; release has not been performed. The routing, external-runner, and provider-adapter regression passed 96/96; focused provider-adapter tests passed 4/4. The complete Agentflow script suite passed outside the restricted process sandbox, and the installed shortcut/PTY boundary was verified in a disposable environment. No authenticated provider call was made, so live-provider behavior, real cost behavior, and remote cancellation remain unverified. See the R8 completion and release-readiness evidence below; deterministic acceptance does not itself authorize release.
 
-The active project `ag.json` uses `cheap: gpt-6-luna/low`, `basic: gpt-6.1-sol/low`, and `better: gpt-6.1-sol/medium`; `best` aliases `better`. Planning roles use Basic and security scan uses Better. This changes project worker settings; template defaults and the interactive main-session model have not been changed.
+The active project `ag.json` uses `cheap: gpt-6-luna/low`, `basic: gpt-6.1-sol/low`, and `better: gpt-6.1-sol/medium`; `best` aliases `better`. Planning roles use Basic and security scan uses Better. These are project worker settings, not the interactive main-session model or an account entitlement. Whether a model is selectable in a Codex/ChatGPT surface can depend on account plan, workspace/admin controls, client, and rollout; `ag.json` cannot grant that access.
+
+To keep the development project and installed copy aligned without an automatic or formal package-install step, treat this checkout as the source of truth. Only after an explicit owner request to update: back up the installed target, copy the intended files, compare SHA-256 hashes between source and installed files, then run tests/smoke checks from the installed copy. Preserve installed-only files. Never perform this synchronization during routine development or release preparation.
 
 Native and host execution remain explicit adapter boundaries because this repository cannot fabricate real native handles or host-session controls. The live-provider file remains default-deny and opt-in. Deterministic tests prove command construction and conservative parsing, not authenticated provider execution, real cost behavior, or remote cancellation. No paid provider call belongs in the default test suite.
 
@@ -341,9 +373,9 @@ Completion criteria:
 - documentation describes actual CLI and transport behavior;
 - no production-readiness claim remains unsupported by deterministic evidence.
 
-#### R8 remaining implementation plan
+#### R8 implementation plan (completed; retained as scope history)
 
-Complete these items in order; do not mark R8 complete from the existing focused tests alone.
+The following plan was completed and its acceptance evidence is summarized below. The detailed entries are retained to show scope and evidence, not as outstanding work.
 
 1. **R8.1 — Installed CLI boundary**
 
@@ -359,7 +391,7 @@ Complete these items in order; do not mark R8 complete from the existing focused
 
    - Completed: all twelve Phase 9 fixture journeys, including both L4 branches, both L5 outcomes, settled-unavailable fallback, uncertain and owner-cancelled no-relaunch behavior, interrupted resume, and stale identity rejection. Do not count budget-blocked paths as successful full L4/L5 journeys.
 
-   - Apply the resolved P1 budget change below; verify the full review/Debate paths without live provider calls. Continue independent negative, settlement, and resume work.
+   - Applied the resolved P1 budget change; verified the full review/Debate paths without live provider calls and completed the negative, settlement, and resume journeys.
 
    - Implemented: the CLI API reloads and validates current `ag.json`, rehydrates the allowlisted stage briefs and launched-profile IDs from state, and accepts fresh transient provider recipes/adapters at resume time. The process journey stops after accepted assessment, reloads state, continues at primary, and proves the assessment was neither relaunched nor charged again. Provider command arguments, environment values, credentials, and adapters are not persisted.
 
@@ -387,7 +419,7 @@ Complete these items in order; do not mark R8 complete from the existing focused
 
    - Updated the script reference, user-facing guide, and this file to match observed CLI, persistence, cancellation, and live-provider limitations. Native/host dispatch remains an explicit adapter boundary; real host handles are not fabricated.
 
-   - Only after all checks pass may the status change to production-ready.
+   - Checks passed for deterministic R8 acceptance. Live-provider behavior remains unverified and is not represented as production-ready.
 
 #### Plan controls and open decision
 
@@ -395,7 +427,7 @@ Outcome: complete R8 with reproducible process-boundary evidence and accurate do
 
 Minimality check: extend the current fixture harness and existing adapters rather than add another routing engine. Prefer documenting the actual single-state-file layout unless a separate artifact is needed to satisfy a concrete invariant. No paid provider call is needed for deterministic coverage.
 
-#### Release readiness decision — 2026-10-07
+#### Release readiness decision — updated 2026-10-08
 
 - Decision: **R8 is complete; do not publish or release in this task.** The full suite, installed shortcut/PTY journey, and final diff review passed. Local development commit `c43d7d5` records the R8 implementation; no release-version change, push, or publication was made. Phase 10 delivery checks still require a separate release request.
 
@@ -405,15 +437,17 @@ Minimality check: extend the current fixture harness and existing adapters rathe
 
 - Known remaining limitations: installed validation used a disposable zsh home because this execution shell has no configured `agf` function; it did not alter or verify the owner's persistent shell configuration. The independent review budget was consumed by the blocking finding; the correction received host review and deterministic regression/full-suite coverage, but no second independent review was launched. Keep the no-auto-update preference above intact for future tasks.
 
+- Follow-up after the 2026-10-07 decision: on 2026-10-08, after the owner's explicit update instruction, the installed linter was synchronized with the development copy to address the stale-timestamp stop-hook failure. The development and installed linter/test files were hash-compared; the installed linter suite passed. This was an explicit update, not an automatic project action.
+
 - Release reminder: after R8 is complete, run the Phase 10 delivery sequence, inspect the exact staged files and release version, commit under the session's recorded authorization, run the installed smoke journey again, and push only when separately authorized.
 
 #### Recommended next-stage tasks
 
-1. **Phase 10 release preparation.** Only after an explicit release request, verify the release version and exact staged files, create the versioned commit, and run delivery checks; do not push or publish without separate authorization.
+1. **Phase 10 release.** Waiting for an explicit release request. Then verify version metadata and exact staged files, run the final installed-copy smoke check, and follow the delivery checklist. Do not push or publish unless separately authorized.
 
-2. Keep the release note and persistent no-auto-update preference intact; no further R8 implementation work remains unless new evidence reopens an acceptance item.
+2. Keep the release note and persistent no-auto-update preference intact. No further R8 work is open unless new evidence reopens an acceptance item.
 
-3. After release, implement token-efficient prompt-enabled run tracing. A request such as `godev trace` should set only a local per-run flag, collect compact structured events, emit one short line on stage transitions/errors, and expose details through a bounded terminal view. Derive data from existing state without another model call or prompt replay; keep it temporary by default and redact prompts, credentials, environment values, and raw provider arguments. Default to `summary`; support `full` only when explicitly requested.
+3. Prompt-enabled run tracing is complete and synchronized to the installed copy; no further trace work is open unless new evidence reopens acceptance. The separate release task remains unchanged.
 
 ## Invariants
 
@@ -1071,13 +1105,13 @@ An additional live-provider gate is explicit and opt-in. It requires a nonempty 
 After every phase:
 
 1. run its focused failing tests before implementation;
-2. apply only the approved diff;
+2. apply only the requested/authorized diff;
 3. run focused tests and unchanged integration tests;
 4. run `git diff --check`;
-5. compare the working-tree diff with the approved proposal;
+5. compare the working-tree diff with the recorded scope and acceptance criteria;
 6. preserve unrelated `.gitignore`, `.agentflow/`, and `ag.json` changes.
 
-After all phases pass, update documentation to describe actual behavior rather than planned behavior. Commit only after presenting the exact staged files, diff summary, and complete commit message for separate approval. Reinstallation and push remain separate operations.
+After all phases pass, update documentation to describe actual behavior rather than planned behavior. Commit scoped authorized work without per-commit approval; show the diff for visibility. Reinstallation and push remain separate operations and require explicit owner requests.
 
 Existing review callers remain compatible. Plus-aware callers may supply `material_risk` and `deterministic_verification_sufficient`; callers that omit both retain upstream cross-check behavior.
 

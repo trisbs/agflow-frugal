@@ -40,8 +40,12 @@ test('parse_close_args requires one manifest stdin and keeps push authority sepa
 test('route parser accepts only the documented CLI forms', () => {
 	assert.deepEqual(agf.parse_route_args(['plan', '--facts-stdin']), { command: 'plan', facts_stdin: true })
 	assert.deepEqual(agf.parse_route_args(['resume', '--task', 'task-1']), { command: 'resume', task_id: 'task-1' })
+	assert.deepEqual(agf.parse_route_args(['run', '--facts-stdin', '--trace']), { command: 'run', facts_stdin: true, trace: 'summary' })
+	assert.deepEqual(agf.parse_route_args(['resume', '--task', 'task-1', '--trace=full']), { command: 'resume', task_id: 'task-1', trace: 'full' })
 	assert.match(agf.parse_route_args(['plan', 'facts.json']).error, /facts-stdin/)
 	assert.match(agf.parse_route_args(['inspect', 'task-1']).error, /--task/)
+	assert.match(agf.parse_route_args(['run', '--facts-stdin', '--trace=verbose']).error, /summary or full/)
+	assert.match(agf.parse_route_args(['run', '--facts-stdin', '--trace', '--trace=full']).error, /duplicate/)
 })
 
 test('route facts reader rejects malformed JSON and duplicate keys', () => {

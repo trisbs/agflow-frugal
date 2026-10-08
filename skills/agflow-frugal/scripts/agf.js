@@ -48,8 +48,9 @@ const USAGE_COMMANDS = [
 	{ label: 'setup', syntax: 'agf setup [--fix]', description: 'check or install the shell shortcuts used to run Agentflow' },
 	{ label: 'hooks', syntax: 'agf hooks [--project|--global] [--host <name>] [--off]', description: 'install or remove verified Stop hooks and the project commit guard' },
 	{ label: 'settings', syntax: 'agf settings <show|validate|change|rename> [options]', description: 'inspect or change the current project configuration' },
-	{ label: 'route', syntax: 'agf route <plan|run> --facts-stdin', description: 'plan or execute deterministic tier routing from one JSON facts object on standard input' },
-	{ label: 'route', syntax: 'agf route <resume|inspect> --task <task-id>', description: 'resume or inspect one persisted deterministic routing task' },
+	{ label: 'route', syntax: 'agf route <plan|run> --facts-stdin [--trace[=summary|full]]', description: 'plan or execute deterministic tier routing from one JSON facts object on standard input' },
+	{ label: 'route', syntax: 'agf route resume --task <task-id> [--trace[=summary|full]]', description: 'resume one persisted deterministic routing task' },
+	{ label: 'route', syntax: 'agf route inspect --task <task-id>', description: 'inspect one persisted deterministic routing task' },
 ]
 
 
@@ -712,6 +713,7 @@ const read_start_message = () => {
 }
 
 const is_activation_only_message = message => ['godev', '/godev'].includes(String(message).trim().toLowerCase())
+const is_godev_command = message => /^\s*\/?godev(?:\s|$)/iu.test(String(message))
 
 const insert_start_message = (text, current_ask, message) => {
 	const { parse_fast_lane } = require('./fast-lane.js')
@@ -736,6 +738,18 @@ const insert_start_message = (text, current_ask, message) => {
 	const body_tail = next_ask < 0 ? after_plus : after_plus.slice(0, next_ask)
 	if (body_tail.trim() !== '') throw new Error(`Ask ${current_ask.id} is not a single empty + placeholder`)
 	return { text: `${text.slice(0, plus)}${listed}${text.slice(line_end < 0 ? text.length : line_end)}`, inserted: true, reason: 'empty_placeholder_replaced' }
+}
+
+const append_handoff_message = (text, current_ask, message) => {
+	if (!current_ask) return { text, inserted: false, reason: 'no_open_ask' }
+	const listed = notebook_writer.format_owner_input(message)
+	const tail = text.slice(current_ask.body_start)
+	const record_start = tail.search(/^(?:---[\t ]*$|## \[(?:RUN|WIP)-\d+\])/mu)
+	const position = record_start < 0 ? text.length : current_ask.body_start + record_start
+	if (text.slice(current_ask.body_start, position).includes(listed)) return { text, inserted: false, reason: 'already_present' }
+	const before = text.slice(0, position).trimEnd()
+	const after = text.slice(position)
+	return { text: `${before}\n\n${listed}\n\n${after}`, inserted: true, reason: 'owner_handoff_input_saved' }
 }
 
 const next_run_id = (notebook_text, current_ask) => {
@@ -776,7 +790,7 @@ const start_result = ({ repo, host, host_family, notebook, notebook_text, intake
 		tracked_project_records: setup_result.changed_files.filter(file => [notebook, 'ag.json', '.gitignore'].includes(file)),
 		ignored_local_host_settings: setup_result.changed_files.filter(file => ['.codex/hooks.json', '.claude/settings.json'].includes(file)),
 	},
-	message: { inserted: message_result.inserted, reason: message_result.reason },
+	message: { inserted: message_result.inserted, reason: message_result.reason, ...(message_result.owner_handoff ? { owner_handoff: message_result.owner_handoff } : {}) },
 	current_ask_identifier: intake.current_ask?.id || null,
 	current_ask: intake.current_ask,
 	changed_paths: intake.changed_paths,
@@ -828,6 +842,7 @@ const emit_start_result = (result, args, repo, log) => {
 	log(`notebook: ${result.notebook}`)
 	log(`setup: ${result.setup.created ? 'initialized' : 'already complete'}`)
 	log(`owner message: ${result.message.inserted ? 'recorded' : 'already present'}`)
+	if (result.message.owner_handoff) log(`owner: continued from Codex session ${result.message.owner_handoff.from.session}`)
 	if (result.hooks.status === 'not_available') {
 		log('hooks: not_available')
 		log(`manual capture: ${result.hooks.instructions.capture}`)
@@ -889,7 +904,7 @@ const start_main = (argv, cwd, log, _ask, _width = 80) => {
 	try {
 		const guarded_file = notebook_owner.safe_path(repo, configured_target, true)
 		input_lock = notebook_writer.acquire_close_round_lock(`${guarded_file}.close-round.lock`)
-		const ownership = notebook_owner.guard({ root: repo, notebook: configured_target, host: args.host, session: args.session, allow_missing: true, resume_unclaimed: true })
+		const ownership = notebook_owner.guard({ root: repo, notebook: configured_target, host: args.host, session: args.session, allow_missing: true, resume_unclaimed: true, resume_active: args.host === 'codex' && is_godev_command(message) })
 		const before_paths = start_snapshot_paths(repo, args.host, configured_target)
 		const before = new Map(before_paths.map(relative => [relative, start_file_identity(path.join(repo, relative))]))
 		const initialized = fs.existsSync(config_file)
@@ -915,6 +930,8 @@ const start_main = (argv, cwd, log, _ask, _width = 80) => {
 			original = require('./notebook-compact').compact_locked({ root: repo, notebook, original, force: false }).snapshot
 			const current = resume_intake.final_ask_span(original.text)
 			message_result = insert_start_message(original.text, current, message)
+			if (ownership.handoff && !message_result.inserted) message_result = append_handoff_message(original.text, current, message)
+			if (ownership.handoff) message_result.owner_handoff = ownership.handoff
 			message_result.owner_message = message
 			const populated = resume_intake.final_ask_span(message_result.text || original.text)
 			if (populated && populated.text !== '+') notebook_writer.capture_input_scope(repo, notebook, args.host, populated.id, { ownership, session: args.session })
@@ -2596,14 +2613,20 @@ const parse_route_args = argv => {
 	if (!Array.isArray(argv) || argv.length === 0) return { error: 'route requires a command' }
 	const [command, ...rest] = argv
 	if (!['plan', 'run', 'resume', 'inspect'].includes(command)) return { error: 'route command must be plan, run, resume, or inspect' }
+	const trace_args = rest.filter(value => value === '--trace' || value.startsWith('--trace='))
+	if (trace_args.length > 1) return { error: 'route trace option is duplicated' }
+	const trace = trace_args.length === 0 ? null : trace_args[0] === '--trace' ? 'summary' : trace_args[0].slice('--trace='.length)
+	if (trace !== null && !['summary', 'full'].includes(trace)) return { error: 'trace mode must be summary or full' }
+	const args = rest.filter(value => value !== '--trace' && !value.startsWith('--trace='))
+	if (trace !== null && command === 'inspect') return { error: 'trace is supported only for plan, run, and resume' }
 	if (command === 'plan' || command === 'run') {
-		if (rest.length !== 1 || rest[0] !== '--facts-stdin') return { error: `route ${command} requires exactly --facts-stdin` }
-		return { command, facts_stdin: true }
+		if (args.length !== 1 || args[0] !== '--facts-stdin') return { error: `route ${command} requires exactly --facts-stdin` }
+		return { command, facts_stdin: true, ...(trace === null ? {} : { trace }) }
 	}
-	if (rest.length !== 2 || rest[0] !== '--task' || typeof rest[1] !== 'string' || rest[1].trim().length === 0) {
+	if (args.length !== 2 || args[0] !== '--task' || typeof args[1] !== 'string' || args[1].trim().length === 0) {
 		return { error: `route ${command} requires exactly --task <task-id>` }
 	}
-	return { command, task_id: rest[1] }
+	return { command, task_id: args[1], ...(trace === null ? {} : { trace }) }
 }
 
 const read_route_facts = read => {
@@ -2617,18 +2640,23 @@ const read_route_facts = read => {
 	return facts
 }
 
-const route_main = (argv, cwd) => {
+const route_main = (argv, cwd, log = () => {}) => {
 	const parsed = parse_route_args(argv)
 	if (parsed.error) return { json: { status: 'invalid', requirement: parsed.error }, exitCode: 5 }
+	const trace_mode = parsed.trace
 	let facts
 	if (parsed.facts_stdin) {
 		try { facts = read_route_facts(() => fs.readFileSync(0, 'utf8')) } catch (error) {
+			if (trace_mode) log('[agf trace] outcome=invalid')
 			return { json: { status: 'invalid', requirement: error.message }, exitCode: 5 }
 		}
 	}
-	return require('./routing-runner.js').cli({ ...parsed, ...(facts ? { facts } : {}), cwd }).then(json => ({ json, exitCode: require('./routing-runner.js').exit_code_for(json.status) }))
+	return require('./routing-runner.js').cli({ ...parsed, ...(facts ? { facts } : {}), cwd }).then(json => {
+		if (trace_mode) for (const line of require('./routing-trace.js').format(json, trace_mode)) log(line)
+		return { json, exitCode: require('./routing-runner.js').exit_code_for(json.status) }
+	})
 }
-const COMMANDS = { owner: (...args) => require('./notebook-owner.js').cli(...args), compact: (...args) => require('./notebook-compact.js').main(...args), skills: (...args) => require('./skills-audit.js').main(...args), start: start_main, close: close_main, init: init_main, new: new_main, finish: finish_main, cleanup: clean_main, clean: clean_main, merge: clean_main, ditch: ditch_main, uninstall: uninstall_main, setup: setup_main, hooks: hooks_main, settings: settings_main, route: route_main }
+const COMMANDS = { owner: (...args) => require('./notebook-owner.js').cli(...args), compact: (...args) => require('./notebook-compact.js').main(...args), skills: (...args) => require('./skills-audit.js').main(...args), start: start_main, close: close_main, init: init_main, new: new_main, finish: finish_main, cleanup: clean_main, clean: clean_main, merge: clean_main, ditch: ditch_main, uninstall: uninstall_main, setup: setup_main, hooks: hooks_main, settings: settings_main, route: (argv, cwd, log) => route_main(argv, cwd, log) }
 
 const main = (argv, cwd, log, ask, width = 80) => {
 	const cmd = COMMANDS[argv[0]]

@@ -33,6 +33,13 @@ test('the always-loaded skill stays within the retained 32 KiB budget', () => {
 	assert.match(read('skills/agflow-frugal/references/closeout.md'), /"allowed_paths"/)
 })
 
+test('prompt trace is a one-command routed run control with honest unknowns', () => {
+	const skill = read('skills/agflow-frugal/SKILL.md')
+	assert.match(skill, /`godev trace \[full\]`: Codex shows estimated \+40–70 tokens, model, pending class\/worker/u)
+	assert.match(skill, /after assessment, emit one verified class\/model\/worker line/u)
+	assert.match(skill, /No extra call or saved setting.*Unknown facts stay unknown/iu)
+})
+
 test('the always-loaded skill routes advanced machinery on demand', () => {
 	const skill = read('skills/agflow-frugal/SKILL.md') + '\n' + read('skills/agflow-frugal/references/closeout.md')
 	assert.match(skill, /canonical startup command.*agf\.js start.*message-stdin/i)
