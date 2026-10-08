@@ -554,3 +554,7 @@ Task.md now records the 128-test result and completed R8.3 evidence. R8 remains 
 ## [RUN-012] Event — 2026-10-08 11:54:51 +0800 (A-003)
 
 Implemented Codex prompt-triggered trace display: exact `godev trace[ full]` adds a user-visible hook notice with active model, pending classification/worker status, and an estimated 40–70 added tokens; one conditional instruction requests a concise evidence-based status after the existing assessment. Ordinary prompts remain unchanged and secret-shaped model identifiers are redacted. Source stop-hook recovery tests passed 20/20 and prompt-compression passed 13/13; the skill is 32,762 bytes under the 32 KiB cap. Synchronized five explicit installed skill/runtime/docs/test files after backing up old copies to `/tmp/agflow-frugal-trace-hook-backup.od7myA`; installed focused tests passed 33/33 and hashes match. Live Codex UI rendering was not directly tested. Persisted project no-per-diff/no-per-commit approval policy in the always-loaded SKILL.md and Task.md, retaining explicit-request boundaries for push, release, paid calls, and installation. No release or push.
+
+## [RUN-013] Event — 2026-10-08 11:55:27 +0800 (A-003)
+
+Committed the scoped A-003 implementation and records as `7384d7f` (`Add prompt trace notice and persistent project authorization`). The commit contains 15 requested/related files; `.setup-checked` remains untracked and untouched. Post-commit status confirmed it is the only remaining worktree item. No push or release.
