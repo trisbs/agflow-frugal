@@ -4,19 +4,19 @@ Project: agflow-frugal
 
 Notebook: .agentflow/devlog.md — root.
 
-Current commit: local R8 commits c43d7d5, 7b9ef71, bd64e87 and closeout-freshness fix cb85ea3; this closeout records the notebook and review report.
+Current commit: local A-001 closeout 33cd9b8; A-002 closeout will record installed Agentflow sync.
 
-Tests/scenarios: complete Agentflow suite exit 0 after R8 correction; routing-state and journey 25/25; installed routing-state 6/6; round-linter suite exit 0 after freshness correction; installed shortcut/setup and safe-fail PTY smoke.
+Tests/scenarios: installed round-linter test suite exit 0; installed Stop hook exit 0 against project notebook; installed/candidate hashes match.
 
 Configuration: ag.json — schema v8; validated for codex this round.
 
-Proven: A-001 R8 acceptance and closeout freshness correction; no release or push.
+Proven: installed timestamp freshness fix matches verified candidate; previous installed files backed up.
 
-Open: Phase 10 release preparation awaits an explicit release request; live provider behavior remains unverified.
+Open: none.
 
-Next: await explicit Phase 10 release request; preserve no-auto-update preference.
+Next: await the owner.
 
-Artifacts: Task.md; .agentflow/A-001-round-linter-review.md; routing-state and round-linter changes.
+Artifacts: /tmp/agflow-frugal-installed-backup-20261008; installed round-linter.js and round-linter.test.js.
 
 Archived eras: none.
 
@@ -396,5 +396,54 @@ Task.md now records the 128-test result and completed R8.3 evidence. R8 remains 
 ---
 
 # → Ask / A-002 (tristan)
+
++ 已經指示過了 更新版本
+
+---
+
+## [RUN-001] Event — 2026-10-08 10:24:28 +0800 (A-002)
+
+- Synchronized installed round-linter runtime and test from the verified candidate after backing up both prior files; backup and candidate/installed SHA-256 values match.
+
+## [RUN-002] Event — 2026-10-08 10:24:28 +0800 (A-002)
+
+- Installed round-linter tests passed, and the installed Stop hook exited 0 against the repository without the prior historical-RUN timestamp warning; no shell/hook settings, release, or push changed.
+
+# ← Reply / A-002
+
+* _2026-10-08 10:24:28 +0800 (gpt-6-luna/medium)_
+
+## [SUMMARY]
+
+- The installed Agentflow linter is now synchronized to the verified candidate, and the installed Stop hook accepts the completed A-001 round.
+- Previous installed files are backed up under `/tmp/agflow-frugal-installed-backup-20261008`.
+- No shell settings, hook configuration, release, or push was changed.
+
+## [FINAL REPORT]
+
+1. Update the installed Agentflow version.
+
+   - Succeeded: synchronized only `round-linter.js` and `round-linter.test.js` from the verified candidate commit. These are the runtime fix and its regression coverage.
+   - Before replacement, saved both old files in `/tmp/agflow-frugal-installed-backup-20261008` and verified the backup hashes matched the installed originals.
+   - After replacement, both installed files have the same SHA-256 as the candidate: runtime `168de813b3b65f57223ef4139cdf660e481ca0d3cf34ef29f6ceec8ed01b67ad`; test `0791ff025b8086ce1648d5d2968f29cdab9ee47b77681c8f6badcfe4cda9d4ef`.
+
+2. Verify the update and the prior hook failure.
+
+   - The installed `round-linter.test.js` suite passed (exit 0).
+   - Ran the installed Stop hook against this repository; it exited 0 with no blocking output. The prior warning was from its outdated linter checking every historical RUN against the 24-hour limit. The installed linter now requires only the latest valid activity timestamp to be fresh, while still rejecting future timestamps and a stale latest activity.
+   - The previous backup remains available if rollback is needed. The project checkout was not changed by this installation sync; the pre-existing `.setup-checked` marker remains untouched.
+
+3. Preserve the release boundary.
+
+   - This was a local installed-skill update only. No version bump, publication, push, shell configuration change, or hook configuration change was made.
+
+## Questions (batched — each with a suggested default)
+
+- None.
+
+
+---
+
+# → Ask / A-003 (tristan)
 
 +
