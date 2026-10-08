@@ -23,12 +23,11 @@ const trace_notice = input => {
   return {
     systemMessage: [
       '🔎 AGF TRACE — CURRENT RUN',
-      '▸ TASK CLASS: PENDING ASSESSMENT',
-      `▸ CURRENT MODEL: ${model}`,
-      '▸ WORKER MODEL/STATUS: NOT STARTED',
-      '▸ EXTRA USAGE: ~40–70 tokens (~0.4–7% by task size); no extra model call.',
+      '🟦 TASK CLASS: PENDING (L0–L5)',
+      `🟢 CURRENT MODEL: ${model}`,
+      '🟣 WORKER MODEL/STATUS: NOT STARTED',
     ].join('\n'),
-    traceContext: `For this godev trace, after existing assessment/routing, emit one scannable status line with bold labels **CLASS**, **CURRENT MODEL**, **WORKER MODEL/STATUS**, **EXTRA COST**. Hook model value: ${model}. Use pending/unknown/not started as warranted; distinguish configured from observed and never infer.`,
+    traceContext: `For this godev trace, classify the task as L0, L1, L2, L3, L4, or L5 after assessment. Then emit one scannable line: 🟦 **TASK CLASS: Lx** | 🟢 **CURRENT MODEL: ...** | 🟣 **WORKER MODEL/STATUS: ...**. Hook model value: ${model}. Say pending/unknown/not started as warranted; distinguish configured from observed. Do not repeat token-cost information in the result.`,
   };
 };
 

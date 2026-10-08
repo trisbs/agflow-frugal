@@ -9,7 +9,7 @@ const { test } = require('node:test');
 
 const hook = path.join(__dirname, 'stop-hook.js');
 
-test('Codex trace prompt displays bounded cost and adds one conditional status instruction', () => {
+test('Codex trace prompt highlights class and models without repeating cost', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agf-prompt-trace-'));
   const file = path.join(root, '.agentflow/devlog.md');
   fs.mkdirSync(path.dirname(file));
@@ -24,14 +24,14 @@ test('Codex trace prompt displays bounded cost and adds one conditional status i
   const traced = invoke('godev trace full');
   assert.equal(traced.status, 0, traced.stderr);
   const trace_output = JSON.parse(traced.stdout);
-  assert.match(trace_output.systemMessage, /🔎 AGF TRACE — CURRENT RUN/);
-  assert.match(trace_output.systemMessage, /▸ TASK CLASS: PENDING ASSESSMENT/);
-  assert.match(trace_output.systemMessage, /▸ CURRENT MODEL: gpt-6\.1-sol/);
-  assert.match(trace_output.systemMessage, /▸ WORKER MODEL\/STATUS: NOT STARTED/);
-  assert.match(trace_output.systemMessage, /▸ EXTRA USAGE: ~40–70 tokens \(~0\.4–7% by task size\); no extra model call/);
-  assert.match(trace_output.hookSpecificOutput.additionalContext, /bold labels.*CLASS.*CURRENT MODEL.*WORKER.*COST/i);
+  assert.match(trace_output.systemMessage, /🟦 TASK CLASS: PENDING \(L0–L5\)/);
+  assert.match(trace_output.systemMessage, /🟢 CURRENT MODEL: gpt-6\.1-sol/);
+  assert.match(trace_output.systemMessage, /🟣 WORKER MODEL\/STATUS: NOT STARTED/);
+  assert.doesNotMatch(trace_output.systemMessage, /EXTRA USAGE|tokens/);
+  assert.match(trace_output.hookSpecificOutput.additionalContext, /classify the task as L0, L1, L2, L3, L4, or L5/i);
+  assert.match(trace_output.hookSpecificOutput.additionalContext, /🟦.*🟢.*🟣/s);
   assert.match(trace_output.hookSpecificOutput.additionalContext, /hook model value: gpt-6\.1-sol/i);
-  assert.match(trace_output.hookSpecificOutput.additionalContext, /configured from observed/);
+  assert.match(trace_output.hookSpecificOutput.additionalContext, /distinguish configured from observed/i);
 
   const ordinary = invoke('godev continue');
   assert.equal(ordinary.status, 0, ordinary.stderr);
@@ -53,7 +53,7 @@ test('Codex trace notice redacts secret-shaped model identifiers', () => {
   });
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
-  assert.match(output.systemMessage, /CURRENT MODEL: unknown/);
+  assert.match(output.systemMessage, /🟢 CURRENT MODEL: unknown/);
   assert.doesNotMatch(output.systemMessage, /access_token-secret/);
 });
 

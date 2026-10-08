@@ -502,6 +502,12 @@ Task.md now records the 128-test result and completed R8.3 evidence. R8 remains 
 
 + godev "trace" 功能要把必要資訊 highlight
 
++ godev trace
+
++ godev 不用每次顯示 extra usage, current model 怎麼可能是 unknown?, task class 加上 L0-L5, key-value 使用不同顏色
+
++ current model 跟 worker model 使用醒目顏色區分
+
 ---
 
 ## [RUN-001] Event — 2026-10-08 10:49:51 +0800 (A-003)
@@ -568,3 +574,9 @@ Committed the scoped A-003 implementation and records as `7384d7f` (`Add prompt 
 - Reworked trace display into a prominent heading and separate uppercase fields for class, current model, worker model/status, and added cost; final trace format now requests bold field labels.
 - Passed the hook-observed model value into trace context so the final status does not infer it. Unknown and pending states remain explicit; cost shows both the ~40–70-token estimate and proportional range, with no extra model call.
 - Focused hook recovery and prompt-compression tests passed 33/33; skill size is 32,757 bytes. Live Codex UI rendering remains unverified. Did not update installed skill because this prompt did not request installation.
+
+## [RUN-015] Event — 2026-10-08 12:07:13 +0800 (A-003)
+
+- Trace input now highlights the pending L0–L5 class, current model (green marker), and worker model/status (purple marker); the final status must choose a verified L0–L5 class and reuse the hook model value. Routine trace output no longer repeats token-cost estimates.
+- Confirmed the active installed hook is older: it places model only in the UI warning, not assistant context. Development hook passes it through; installed files were left unchanged because no install update was explicitly requested.
+- OpenAI Hooks docs confirm the input `model` field is the active slug and `systemMessage` is a UI warning; they document no ANSI/text-color styling. Used colored square emoji markers. Focused tests passed 33/33, skill size 32,760 bytes, and `git diff --check` passed. No install update, push, or release.
