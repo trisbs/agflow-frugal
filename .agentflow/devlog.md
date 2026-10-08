@@ -498,6 +498,10 @@ Task.md now records the 128-test result and completed R8.3 evidence. R8 remains 
 
 + diff commit 不需要再因為 general skill rule review, 加到可以持續保存並且被確實讀取執行的地方
 
++ godev trace
+
++ godev "trace" 功能要把必要資訊 highlight
+
 ---
 
 ## [RUN-001] Event — 2026-10-08 10:49:51 +0800 (A-003)
@@ -558,3 +562,9 @@ Implemented Codex prompt-triggered trace display: exact `godev trace[ full]` add
 ## [RUN-013] Event — 2026-10-08 11:55:27 +0800 (A-003)
 
 Committed the scoped A-003 implementation and records as `7384d7f` (`Add prompt trace notice and persistent project authorization`). The commit contains 15 requested/related files; `.setup-checked` remains untracked and untouched. Post-commit status confirmed it is the only remaining worktree item. No push or release.
+
+## [RUN-014] Event — 2026-10-08 11:59:49 +0800 (A-003)
+
+- Reworked trace display into a prominent heading and separate uppercase fields for class, current model, worker model/status, and added cost; final trace format now requests bold field labels.
+- Passed the hook-observed model value into trace context so the final status does not infer it. Unknown and pending states remain explicit; cost shows both the ~40–70-token estimate and proportional range, with no extra model call.
+- Focused hook recovery and prompt-compression tests passed 33/33; skill size is 32,757 bytes. Live Codex UI rendering remains unverified. Did not update installed skill because this prompt did not request installation.

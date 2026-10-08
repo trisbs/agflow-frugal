@@ -24,10 +24,13 @@ test('Codex trace prompt displays bounded cost and adds one conditional status i
   const traced = invoke('godev trace full');
   assert.equal(traced.status, 0, traced.stderr);
   const trace_output = JSON.parse(traced.stdout);
-  assert.match(trace_output.systemMessage, /estimated extra model usage ~40–70 tokens/);
-  assert.match(trace_output.systemMessage, /no extra model call/);
-  assert.match(trace_output.systemMessage, /Current model=gpt-6.1-sol; task class=pending assessment; worker=not started/);
-  assert.match(trace_output.hookSpecificOutput.additionalContext, /one concise status line/);
+  assert.match(trace_output.systemMessage, /🔎 AGF TRACE — CURRENT RUN/);
+  assert.match(trace_output.systemMessage, /▸ TASK CLASS: PENDING ASSESSMENT/);
+  assert.match(trace_output.systemMessage, /▸ CURRENT MODEL: gpt-6\.1-sol/);
+  assert.match(trace_output.systemMessage, /▸ WORKER MODEL\/STATUS: NOT STARTED/);
+  assert.match(trace_output.systemMessage, /▸ EXTRA USAGE: ~40–70 tokens \(~0\.4–7% by task size\); no extra model call/);
+  assert.match(trace_output.hookSpecificOutput.additionalContext, /bold labels.*CLASS.*CURRENT MODEL.*WORKER.*COST/i);
+  assert.match(trace_output.hookSpecificOutput.additionalContext, /hook model value: gpt-6\.1-sol/i);
   assert.match(trace_output.hookSpecificOutput.additionalContext, /configured from observed/);
 
   const ordinary = invoke('godev continue');
@@ -50,7 +53,7 @@ test('Codex trace notice redacts secret-shaped model identifiers', () => {
   });
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
-  assert.match(output.systemMessage, /Current model=unknown/);
+  assert.match(output.systemMessage, /CURRENT MODEL: unknown/);
   assert.doesNotMatch(output.systemMessage, /access_token-secret/);
 });
 

@@ -27,7 +27,7 @@ not a general guarantee that code or a model claim is honest.
   the underlying completion evidence is present.
 
 - **`stop-hook.js`** — the independent final host check. It reads the real clock and repository push state, supplies transcript terminal output when a devlog was edited, and exits `2` only when a completed round fails the linter. An unfinished round produces repair warnings without blocking the active turn. A failure keeps the current round open for repair; it does not ask the host to create a new owner-looking Ask. `stop_hook_active` exits `0` so one correction cannot trap a session in a loop. A valid `AGENTFLOW_EXTERNAL_DELEGATE` marker bypasses owner-round checks; the launcher remains responsible for provenance and isolation.
-- On Codex `UserPromptSubmit`, exact `godev trace` or `godev trace full` also displays a cost/model/pending-state notice and adds one conditional final-status instruction. It estimates 40–70 extra tokens for the traced task, makes no extra model call, and leaves non-trace prompts unchanged.
+- On Codex `UserPromptSubmit`, exact `godev trace` or `godev trace full` displays a highlighted, one-field-per-line class/model/worker/cost notice and adds one conditional bold-labeled final-status instruction. It estimates 40–70 extra tokens, makes no extra model call, and leaves non-trace prompts unchanged.
 
 - **`ag-settings.js`** — the shared settings module and CLI. It resolves the
   adjacent configuration, rejects duplicate or malformed JSON, validates the

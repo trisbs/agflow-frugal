@@ -21,8 +21,14 @@ const trace_notice = input => {
   if (input.hook_event_name !== 'UserPromptSubmit' || !trace_prompt(input.prompt)) return {};
   const model = require('./routing-trace.js').safe_atom(input.model);
   return {
-    systemMessage: `godev trace enabled for this task: estimated extra model usage ~40–70 tokens (about 0.4–7% depending on task size); no extra model call. Current model=${model}; task class=pending assessment; worker=not started.`,
-    traceContext: `For this godev trace task, after existing assessment/routing (no extra model call), add one concise status line with the verified task class, current model, and worker model/status if started. Distinguish configured from observed; say unknown when not evidenced.`,
+    systemMessage: [
+      '🔎 AGF TRACE — CURRENT RUN',
+      '▸ TASK CLASS: PENDING ASSESSMENT',
+      `▸ CURRENT MODEL: ${model}`,
+      '▸ WORKER MODEL/STATUS: NOT STARTED',
+      '▸ EXTRA USAGE: ~40–70 tokens (~0.4–7% by task size); no extra model call.',
+    ].join('\n'),
+    traceContext: `For this godev trace, after existing assessment/routing, emit one scannable status line with bold labels **CLASS**, **CURRENT MODEL**, **WORKER MODEL/STATUS**, **EXTRA COST**. Hook model value: ${model}. Use pending/unknown/not started as warranted; distinguish configured from observed and never infer.`,
   };
 };
 

@@ -75,7 +75,7 @@ The Plus budget permits one external worker, delegation depth one, no parallel w
 
 Before answering or acting, save each submitted message in the current Ask, including diagnostic questions after interruption. Without a capture notice, run `notebook-write.js append-input --notebook <target-doc> --input-stdin` with the exact message. Use startup's repository-relative notebook value unchanged. Format paragraphs as `+ <user message>` with blank lines and indented continuations protecting pasted headings. No capture comments or added blockquotes. The loaded `UserPromptSubmit` hook captures automatically; hookless hosts add `--host <safe-id>` to that manual call. Queued text, tool output and hook notices are not owner submissions.
 
-`godev trace [full]`: Codex shows estimated +40–70 tokens, model, pending class/worker; after assessment, emit one verified class/model/worker line. No extra call or saved setting; CLI: `agf route plan|run|resume --trace[=full]`. Unknown facts stay unknown.
+`godev trace [full]`: Codex highlights class/model/worker model-status/cost; after assessment emit one bold-labeled CLASS/MODEL/WORKER/COST line. No extra call or saved setting; CLI: `agf route plan|run|resume --trace[=full]`. Unknown facts stay unknown.
 
 Answer the entire current Ask in its saved Reply; question-only turns also close with `agf close --manifest-stdin`. A diagnostic follow-up does not cancel the unfinished task or require fresh permission for authorized work; resume it and close when its existing gates pass, unless the owner cancels or replaces it. When explaining commands, compare the loaded rule with actual output; distinguish required checks, your mistakes, and genuine instruction gaps.
 
