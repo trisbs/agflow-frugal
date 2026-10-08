@@ -93,3 +93,5 @@ node "$HOME/.claude/skills/agflow-frugal/scripts/setup.js"
 - [Script reference](skills/agflow-frugal/scripts/README.md), for technical setup and recovery.
 
 Project settings live in `ag.json`, using the version-8 configuration format. Type `settings` to inspect them. Existing v7 files migrate conservatively when opened. `allowed-worker` is an unordered permission list of external, internal, and host routes; its order has no execution meaning. `cli-provider` filters only external profiles. Model profiles live under `external-workers`, and advisor choices under `pipeline-roles`.
+
+In Codex, use `godev trace enable` to keep concise prompt tracing enabled for the current checkout, and `godev trace disable` to turn it off. This local, ignored setting survives across prompts and restarts but is not shared with other checkouts. Enabling reports the estimated ~40–70-token overhead per traced prompt once. The existing `godev trace` and `godev trace full` commands remain one-shot options.

@@ -16,18 +16,86 @@ const { collect } = require('./completion-context');
 const external_delegate_marker_pattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 
 const trace_prompt = prompt => /^\s*\/?godev\s+trace(?:\s+full)?\s*$/iu.test(String(prompt || ''));
+const trace_mode_command = prompt => {
+  const match = /^\s*\/?godev\s+trace\s+(enable|disable)\s*$/iu.exec(String(prompt || ''));
+  return match ? match[1].toLowerCase() === 'enable' : null;
+};
+const status_prompt = prompt => /^\s*\/?godev\s+status\s*$/iu.test(String(prompt || ''));
 
-const trace_notice = input => {
-  if (input.hook_event_name !== 'UserPromptSubmit' || !trace_prompt(input.prompt)) return {};
+const status_context = input => input.hook_event_name === 'UserPromptSubmit' && status_prompt(input.prompt)
+  ? 'For this godev status request, read the configured devlog (STATUS, open Ask and latest RUN/Reply); follow only its direct task/design links for approval gates. Summarize the task, latest evidence and next action. Separate Awaiting owner approval (explicit unresolved gates only) from Awaiting work/checks and Blocked. Never infer approval from unfinished work or stale STATUS; flag STATUS/round conflicts. Say “None found” when none is pending. Read-only beyond normal capture; no workers or extra tools solely for status.'
+  : '';
+
+const trace_mode_path = project_dir => node_path.join(project_dir, '.agentflow', '.tmp', 'trace-mode.json');
+
+const read_trace_mode = project_dir => {
+  const file = trace_mode_path(project_dir);
+  try {
+    const file_stat = node_fs.lstatSync(file);
+    if (!file_stat.isFile() || file_stat.isSymbolicLink()) return false;
+    const mode = JSON.parse(node_fs.readFileSync(file, 'utf8'));
+    return mode?.version === 1 && mode.enabled === true;
+  } catch (error) {
+    return false;
+  }
+};
+
+const write_trace_mode = (project_dir, enabled) => {
+  const project_root = node_fs.realpathSync(project_dir);
+  const workspace = node_path.join(project_root, '.agentflow');
+  const local_state = node_path.join(workspace, '.tmp');
+  for (const directory of [workspace, local_state]) {
+    node_fs.mkdirSync(directory, { recursive: true });
+    const directory_stat = node_fs.lstatSync(directory);
+    if (!directory_stat.isDirectory() || directory_stat.isSymbolicLink()) throw new Error('trace mode path is not a local directory');
+  }
+  const file = trace_mode_path(project_root);
+  try {
+    const file_stat = node_fs.lstatSync(file);
+    if (!file_stat.isFile() || file_stat.isSymbolicLink()) throw new Error('trace mode file is not a regular local file');
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
+  let descriptor;
+  try {
+    descriptor = node_fs.openSync(temporary, 'wx', 0o600);
+    node_fs.writeFileSync(descriptor, `${JSON.stringify({ version: 1, enabled })}\n`);
+    node_fs.fsyncSync(descriptor);
+    node_fs.closeSync(descriptor);
+    descriptor = undefined;
+    node_fs.renameSync(temporary, file);
+  } finally {
+    if (descriptor !== undefined) node_fs.closeSync(descriptor);
+    try { node_fs.unlinkSync(temporary); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
+};
+
+const trace_mode_notice = (enabled, failed = false) => {
+  if (failed) return {
+    systemMessage: 'AGF TRACE MODE — CHANGE FAILED',
+    traceContext: 'The requested persistent trace-mode change failed. Do not claim that tracing was enabled or disabled; report that the local mode could not be updated.',
+  };
+  return {
+    systemMessage: enabled
+      ? 'AGF TRACE MODE — ENABLED\nApplies to later Codex prompts in this checkout until `godev trace disable`. Adds approximately 40–70 tokens per traced prompt; no extra model call.'
+      : 'AGF TRACE MODE — DISABLED\nLater prompts in this checkout will not include persistent trace context.',
+    traceContext: `The owner changed persistent trace mode to ${enabled ? 'enabled' : 'disabled'}. This control prompt itself is not traced. Confirm the setting and its scope; do not classify this control as an ordinary task.`,
+  };
+};
+
+const trace_notice = (input, persistent = false) => {
+  if (input.hook_event_name !== 'UserPromptSubmit' || (!persistent && !trace_prompt(input.prompt))) return {};
   const model = require('./routing-trace.js').safe_atom(input.model);
   return {
     systemMessage: [
-      '🔎 AGF TRACE — CURRENT RUN',
-      '🟦 TASK CLASS: PENDING (L0–L5)',
-      `🟢 CURRENT MODEL: ${model}`,
-      '🟣 WORKER MODEL/STATUS: NOT STARTED',
+      'AGF TRACE — CURRENT RUN',
+      'TASK CLASS: **PENDING (L0–L5)**',
+      `CURRENT MODEL: **${model}**`,
+      'WORKER MODEL/STATUS: **NOT STARTED**',
+      'WORKERS STARTED: **0**',
     ].join('\n'),
-    traceContext: `For this godev trace, classify the task as L0, L1, L2, L3, L4, or L5 after assessment. Then emit one scannable line: 🟦 **TASK CLASS: Lx** | 🟢 **CURRENT MODEL: ...** | 🟣 **WORKER MODEL/STATUS: ...**. Hook model value: ${model}. Say pending/unknown/not started as warranted; distinguish configured from observed. Do not repeat token-cost information in the result.`,
+    traceContext: `For this godev trace, classify the task as L0, L1, L2, L3, L4, or L5 after assessment. Then emit one scannable line with plain keys and bold values: TASK CLASS: **Lx** | CURRENT MODEL: **...** | WORKER MODEL/STATUS: **...** | WORKERS STARTED: **N**. Hook model value: ${model}. Say pending/unknown/not started as warranted; distinguish configured from observed. Count only workers actually launched; the submit-time count is 0. Do not use emoji key markers or repeat token-cost information in the result.`,
   };
 };
 
@@ -105,14 +173,26 @@ const main = () => {
   if (!node_fs.existsSync(devlog_path)) return 0;
 
   if (input.hook_event_name === 'UserPromptSubmit') {
-    const trace = trace_notice(input);
+    const trace_command = active_host === 'codex' ? trace_mode_command(input.prompt) : null;
+    let trace;
+    if (trace_command !== null) {
+      try {
+        write_trace_mode(project_dir, trace_command);
+        trace = trace_mode_notice(trace_command);
+      } catch (error) {
+        trace = trace_mode_notice(trace_command, true);
+      }
+    } else {
+      trace = trace_notice(input, active_host === 'codex' && read_trace_mode(project_dir));
+    }
+    const status = status_context(input);
     const current = parse_devlog(node_fs.readFileSync(devlog_path, 'utf8')).rounds.at(-1);
     if (!current || current.reply_text.trim()) {
       // Missing bookkeeping must not prevent the owner from requesting repair.
       // Leave history and ownership untouched; the agent receives the prompt.
       process.stdout.write(JSON.stringify({ ...(trace.systemMessage ? { systemMessage: trace.systemMessage } : {}), hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
-        additionalContext: `The user's instruction was not saved in ${notebook_path}: the notebook has no open Ask. Continue with the submitted request. Repair the missing Ask and capture the instruction before further notebook writes, preserving prior history and other sessions' ownership. Do not record this hook notice as user input.${trace.traceContext ? ` ${trace.traceContext}` : ''}`,
+        additionalContext: `The user's instruction was not saved in ${notebook_path}: the notebook has no open Ask. Continue with the submitted request. Repair the missing Ask and capture the instruction before further notebook writes, preserving prior history and other sessions' ownership. Do not record this hook notice as user input.${trace.traceContext ? ` ${trace.traceContext}` : ''}${status ? ` ${status}` : ''}`,
       } }) + '\n');
       return 0;
     }
@@ -133,7 +213,7 @@ const main = () => {
         : ' Do not mutate this notebook or adopt ownership without resolving the ownership conflict. Inspect ownership before notebook recovery.';
       process.stdout.write(JSON.stringify({ ...(trace.systemMessage ? { systemMessage: trace.systemMessage } : {}), hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
-        additionalContext: `The user's instruction was not saved in ${notebook_path}: notebook ownership prevented capture. Continue with the submitted request, including any no-ag instruction.${ownership_guidance} Diagnostic: ${error.message}. Do not record this hook notice as user input.${trace.traceContext ? ` ${trace.traceContext}` : ''}`,
+        additionalContext: `The user's instruction was not saved in ${notebook_path}: notebook ownership prevented capture. Continue with the submitted request, including any no-ag instruction.${ownership_guidance} Diagnostic: ${error.message}. Do not record this hook notice as user input.${trace.traceContext ? ` ${trace.traceContext}` : ''}${status ? ` ${status}` : ''}`,
       } }) + '\n');
       return 0;
     }
@@ -144,7 +224,7 @@ const main = () => {
     const session_notice = input.session_id ? ` Hook session: ${input.session_id}.` : ''
     process.stdout.write(JSON.stringify({ ...(trace.systemMessage ? { systemMessage: trace.systemMessage } : {}), hookSpecificOutput: {
       hookEventName: 'UserPromptSubmit',
-      additionalContext: `The user's instruction ${capture_state} in ${notebook_path}, ${result.ask}.${session_notice} Read the current Ask and address all its instructions together. Do not record this hook notice as user input.${route_notice}${trace.traceContext ? ` ${trace.traceContext}` : ''}`,
+      additionalContext: `The user's instruction ${capture_state} in ${notebook_path}, ${result.ask}.${session_notice} Read the current Ask and address all its instructions together. Do not record this hook notice as user input.${route_notice}${trace.traceContext ? ` ${trace.traceContext}` : ''}${status ? ` ${status}` : ''}`,
     } }) + '\n');
     return 0;
   }

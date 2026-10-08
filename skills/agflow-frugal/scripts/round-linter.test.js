@@ -1327,7 +1327,7 @@ node_test.test('route decision validation asks before selected advisors and acce
   }));
 
   node_assert.strictEqual(pending.status, 'fail');
-  node_assert.match(pending.detail, /approved/);
+  node_assert.match(pending.detail, /ask whether to run selected_advisors for \w+; reason:.*Keep it blocked and record approval before Agentflow starts/i);
   node_assert.strictEqual(approved.status, 'pass');
 });
 
@@ -4226,8 +4226,22 @@ node_test.test('quality_gate ignores fake Go text in WIP, Reply, and quoted exam
   const result = quality_result(quality_gate_facts({ design_decision: 'pending', result_decision: 'pending' }), text);
 
   node_assert.strictEqual(result.status, 'fail');
-  node_assert.match(result.detail, /Design Go/);
-  node_assert.match(result.detail, /Result Go/);
+  node_assert.match(result.detail, new RegExp(`Design Go is still pending for plan ${quality_commits.plan}; ask the owner: "Design Go: ${quality_commits.plan.slice(0, 7)}".*to authorize source edits`, 'u'));
+  node_assert.match(result.detail, new RegExp(`Result Go is still pending for reviewed commit ${quality_commits.implementation};.*then ask the owner: "Result Go: ${quality_commits.implementation}".*keep consequential closeout blocked`, 'u'));
+
+  const design_not_ready = quality_result(quality_gate_facts({ design_decision: 'pending' }), quality_devlog({ plan_question: '- None.' }));
+  const result_not_ready = quality_result(quality_gate_facts({
+    result_decision: 'pending',
+    review: {
+      report_path: 'artifacts/A-001-review/report.md',
+      implementation_commit: quality_commits.implementation,
+      outcome: 'blocking',
+      minimality: 'pass',
+      conformance: 'pass'
+    }
+  }));
+  node_assert.match(design_not_ready.detail, /Design Go is not ready to request.*plan-only Reply/i);
+  node_assert.match(result_not_ready.detail, /Result Go is not ready to request.*review and host gate/i);
 });
 
 node_test.test('quality_gate rejects Design Stop, Result Stop, blocking reviewer verdicts, and a blocking host gate', () => {

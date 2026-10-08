@@ -64,7 +64,7 @@ Read this file in full before deciding review requirements, requesting review, p
 
 - A change to Agentflow record locations sets `workspace_layout_change: true` and supplies `workspace_instruction_inventory` with the six governing skill, stream, pipeline, looper, English-guide, and Traditional-Chinese-guide files required by `cross-check-plan.js`.
 
-- After the review PASS, independently inspect its report and evidence. Consequential work then needs current Result Go for the exact implementation commit.
+- After the review PASS, independently inspect its report and evidence. For consequential work, show the reviewed implementation commit and review/verification result, then ask the owner for exactly `Result Go: <full-commit>` or `Result Stop: <reason>`; explain that Go permits consequential closeout and Stop keeps it blocked. Do not close until answered.
 
 - Closeout stop rule: after current implementation tests and review pass, record-only corrections need only the mechanical completion check. Do not rerun already-passed implementation tests or reviews unless source, tests, behavior instructions, verdicts, or substantive evidence changed. Repeated final validation of unchanged implementation is a protocol defect, not progress. — I-072/I-073/I-079.
 

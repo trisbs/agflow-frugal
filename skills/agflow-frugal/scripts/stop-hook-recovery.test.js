@@ -9,7 +9,7 @@ const { test } = require('node:test');
 
 const hook = path.join(__dirname, 'stop-hook.js');
 
-test('Codex trace prompt highlights class and models without repeating cost', () => {
+test('Codex trace prompt uses plain keys and bold values without repeating cost', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agf-prompt-trace-'));
   const file = path.join(root, '.agentflow/devlog.md');
   fs.mkdirSync(path.dirname(file));
@@ -24,12 +24,15 @@ test('Codex trace prompt highlights class and models without repeating cost', ()
   const traced = invoke('godev trace full');
   assert.equal(traced.status, 0, traced.stderr);
   const trace_output = JSON.parse(traced.stdout);
-  assert.match(trace_output.systemMessage, /🟦 TASK CLASS: PENDING \(L0–L5\)/);
-  assert.match(trace_output.systemMessage, /🟢 CURRENT MODEL: gpt-6\.1-sol/);
-  assert.match(trace_output.systemMessage, /🟣 WORKER MODEL\/STATUS: NOT STARTED/);
+  assert.match(trace_output.systemMessage, /TASK CLASS: \*\*PENDING \(L0–L5\)\*\*/);
+  assert.match(trace_output.systemMessage, /CURRENT MODEL: \*\*gpt-6\.1-sol\*\*/);
+  assert.match(trace_output.systemMessage, /WORKER MODEL\/STATUS: \*\*NOT STARTED\*\*/);
+  assert.match(trace_output.systemMessage, /WORKERS STARTED: \*\*0\*\*/);
+  assert.doesNotMatch(trace_output.systemMessage, /🟦|🟢|🟣/u);
   assert.doesNotMatch(trace_output.systemMessage, /EXTRA USAGE|tokens/);
   assert.match(trace_output.hookSpecificOutput.additionalContext, /classify the task as L0, L1, L2, L3, L4, or L5/i);
-  assert.match(trace_output.hookSpecificOutput.additionalContext, /🟦.*🟢.*🟣/s);
+  assert.match(trace_output.hookSpecificOutput.additionalContext, /TASK CLASS: \*\*Lx\*\*.*CURRENT MODEL: \*\*\.\.\.\*\*.*WORKER MODEL\/STATUS: \*\*\.\.\.\*\*.*WORKERS STARTED: \*\*N\*\*/s);
+  assert.doesNotMatch(trace_output.hookSpecificOutput.additionalContext, /🟦|🟢|🟣/u);
   assert.match(trace_output.hookSpecificOutput.additionalContext, /hook model value: gpt-6\.1-sol/i);
   assert.match(trace_output.hookSpecificOutput.additionalContext, /distinguish configured from observed/i);
 
@@ -38,6 +41,105 @@ test('Codex trace prompt highlights class and models without repeating cost', ()
   const ordinary_output = JSON.parse(ordinary.stdout);
   assert.equal(Object.hasOwn(ordinary_output, 'systemMessage'), false);
   assert.doesNotMatch(ordinary_output.hookSpecificOutput.additionalContext, /trace task/);
+});
+
+test('Codex trace enable persists across prompts until disable without tracing toggle prompts', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agf-prompt-trace-mode-'));
+  const file = path.join(root, '.agentflow/devlog.md');
+  const mode_file = path.join(root, '.agentflow/.tmp/trace-mode.json');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, '# → Ask / A-044\n\n+ existing request\n');
+  const env = { ...process.env };
+  for (const name of ['AGENTFLOW_EXTERNAL_DELEGATE', 'CODEX_THREAD_ID', 'CODEX_SESSION_ID', 'CLAUDE_SESSION_ID', 'AGENTFLOW_SESSION_ID', 'CLAUDE_PROJECT_DIR']) delete env[name];
+  const invoke = prompt => spawnSync(process.execPath, [hook, '--host', 'codex'], {
+    input: JSON.stringify({ cwd: root, hook_event_name: 'UserPromptSubmit', session_id: 'trace-mode-session', turn_id: prompt, model: 'gpt-6.1-sol', prompt }),
+    env, cwd: root, encoding: 'utf8',
+  });
+
+  const enabled = invoke('godev trace enable');
+  assert.equal(enabled.status, 0, enabled.stderr);
+  const enabled_output = JSON.parse(enabled.stdout);
+  assert.match(enabled_output.systemMessage, /TRACE MODE.*ENABLED/is);
+  assert.match(enabled_output.systemMessage, /40.?70 tokens/i);
+  assert.doesNotMatch(enabled_output.hookSpecificOutput.additionalContext, /For this godev trace/);
+  assert.deepEqual(JSON.parse(fs.readFileSync(mode_file, 'utf8')), { version: 1, enabled: true });
+
+  const traced = invoke('ordinary task prompt');
+  assert.equal(traced.status, 0, traced.stderr);
+  const traced_output = JSON.parse(traced.stdout);
+  assert.match(traced_output.systemMessage, /AGF TRACE — CURRENT RUN/);
+  assert.match(traced_output.hookSpecificOutput.additionalContext, /For this godev trace/);
+
+  const disabled = invoke('godev trace disable');
+  assert.equal(disabled.status, 0, disabled.stderr);
+  const disabled_output = JSON.parse(disabled.stdout);
+  assert.match(disabled_output.systemMessage, /TRACE MODE.*DISABLED/is);
+  assert.doesNotMatch(disabled_output.hookSpecificOutput.additionalContext, /For this godev trace/);
+  assert.deepEqual(JSON.parse(fs.readFileSync(mode_file, 'utf8')), { version: 1, enabled: false });
+
+  const ordinary = invoke('ordinary task after disable');
+  assert.equal(ordinary.status, 0, ordinary.stderr);
+  const ordinary_output = JSON.parse(ordinary.stdout);
+  assert.equal(Object.hasOwn(ordinary_output, 'systemMessage'), false);
+  assert.doesNotMatch(ordinary_output.hookSpecificOutput.additionalContext, /For this godev trace/);
+});
+
+test('Codex persistent trace defaults off, is checkout-local, and fails closed on malformed state', () => {
+  const make_checkout = () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agf-prompt-trace-isolation-'));
+    const file = path.join(root, '.agentflow/devlog.md');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, '# → Ask / A-044\n\n+ existing request\n');
+    return root;
+  };
+  const first = make_checkout();
+  const second = make_checkout();
+  const env = { ...process.env };
+  for (const name of ['AGENTFLOW_EXTERNAL_DELEGATE', 'CODEX_THREAD_ID', 'CODEX_SESSION_ID', 'CLAUDE_SESSION_ID', 'AGENTFLOW_SESSION_ID', 'CLAUDE_PROJECT_DIR']) delete env[name];
+  const invoke = (root, prompt) => spawnSync(process.execPath, [hook, '--host', 'codex'], {
+    input: JSON.stringify({ cwd: root, hook_event_name: 'UserPromptSubmit', session_id: 'trace-isolation-session', turn_id: prompt, model: 'gpt-6.1-sol', prompt }),
+    env, cwd: root, encoding: 'utf8',
+  });
+
+  const enabled = invoke(first, 'godev trace enable');
+  assert.equal(enabled.status, 0, enabled.stderr);
+  const other_checkout = invoke(second, 'ordinary task prompt');
+  assert.equal(other_checkout.status, 0, other_checkout.stderr);
+  assert.equal(Object.hasOwn(JSON.parse(other_checkout.stdout), 'systemMessage'), false);
+
+  const mode_file = path.join(second, '.agentflow/.tmp/trace-mode.json');
+  fs.mkdirSync(path.dirname(mode_file), { recursive: true });
+  fs.writeFileSync(mode_file, '{broken');
+  const malformed = invoke(second, 'ordinary task after malformed state');
+  assert.equal(malformed.status, 0, malformed.stderr);
+  assert.equal(Object.hasOwn(JSON.parse(malformed.stdout), 'systemMessage'), false);
+  assert.doesNotMatch(JSON.parse(malformed.stdout).hookSpecificOutput.additionalContext, /For this godev trace/);
+});
+
+test('Codex status prompt requests a read-only devlog summary with explicit approval gates', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agf-prompt-status-'));
+  const file = path.join(root, '.agentflow/devlog.md');
+  fs.mkdirSync(path.dirname(file));
+  fs.writeFileSync(file, '# → Ask / A-044\n\n+ existing request\n');
+  const env = { ...process.env };
+  for (const name of ['AGENTFLOW_EXTERNAL_DELEGATE', 'CODEX_THREAD_ID', 'CODEX_SESSION_ID', 'CLAUDE_SESSION_ID', 'AGENTFLOW_SESSION_ID', 'CLAUDE_PROJECT_DIR']) delete env[name];
+  const result = spawnSync(process.execPath, [hook, '--host', 'codex'], {
+    input: JSON.stringify({ cwd: root, hook_event_name: 'UserPromptSubmit', session_id: 'status-session', turn_id: 'status', prompt: 'godev status' }),
+    env, cwd: root, encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.match(output.hookSpecificOutput.additionalContext, /configured devlog.*STATUS, open Ask and latest RUN\/Reply/i);
+  assert.match(output.hookSpecificOutput.additionalContext, /follow only its direct task\/design links/i);
+  assert.match(output.hookSpecificOutput.additionalContext, /Awaiting owner approval.*Awaiting work\/checks.*Blocked/is);
+  assert.match(output.hookSpecificOutput.additionalContext, /Never infer approval from unfinished work or stale STATUS/i);
+  assert.equal(Object.hasOwn(output, 'systemMessage'), false);
+  const ordinary = spawnSync(process.execPath, [hook, '--host', 'codex'], {
+    input: JSON.stringify({ cwd: root, hook_event_name: 'UserPromptSubmit', session_id: 'status-session', turn_id: 'ordinary', prompt: 'godev continue' }),
+    env, cwd: root, encoding: 'utf8',
+  });
+  assert.equal(ordinary.status, 0, ordinary.stderr);
+  assert.doesNotMatch(JSON.parse(ordinary.stdout).hookSpecificOutput.additionalContext, /Awaiting owner approval/);
 });
 
 test('Codex trace notice redacts secret-shaped model identifiers', () => {
@@ -53,7 +155,7 @@ test('Codex trace notice redacts secret-shaped model identifiers', () => {
   });
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
-  assert.match(output.systemMessage, /🟢 CURRENT MODEL: unknown/);
+  assert.match(output.systemMessage, /CURRENT MODEL: \*\*unknown\*\*/);
   assert.doesNotMatch(output.systemMessage, /access_token-secret/);
 });
 

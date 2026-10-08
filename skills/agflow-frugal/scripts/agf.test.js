@@ -749,7 +749,11 @@ const make_repo = ({ remote = false, prefix = 'agf-' } = {}) => {
 	return { dir, run }
 }
 
-const open_stream = (dir, name) => agf.main(['new', name], dir, () => {}).dir
+const open_stream = (dir, name, { publish = false } = {}) => {
+	const worktree = agf.main(['new', name], dir, () => {}).dir
+	if (publish) execFileSync('git', ['push', 'origin', path.basename(worktree)], { cwd: worktree, stdio: 'ignore' })
+	return worktree
+}
 
 const close_stamp = () => format_local_timestamp(new Date(Date.now() - 120000))
 
@@ -1420,7 +1424,7 @@ test('new opens branch, worktree, notebook and commit in a real repo', () => {
 	assert.equal(JSON.parse(fs.readFileSync(root_config_path, 'utf8')).switches['auto-reply'], 'on')
 	assert.ok(run(['branch', '--list', 'search-page']).includes('search-page'))
 	assert.equal(run(['status', '--porcelain'], r.dir).trim(), '')
-	assert.ok(logs.some((l) => l.includes('no remote configured')))
+	assert.ok(logs.some((l) => l.includes('stream branch remains local; no remote push was attempted')))
 	assert.deepEqual(logs.slice(-12), [
 		'',
 		'stream: search-page open',
@@ -1436,6 +1440,22 @@ test('new opens branch, worktree, notebook and commit in a real repo', () => {
 		`cd '${r.dir}' && codex`,
 	])
 	drop(dir)
+})
+
+test('new creates a stream locally without pushing when origin exists', () => {
+	const { dir, run, bare } = make_repo({ remote: true })
+	try {
+		const logs = []
+		const result = agf.main(['new', 'local only stream', 'local-only-stream'], dir, (message) => logs.push(message))
+
+		assert.equal(result.dir, path.join(dir, '.worktrees', 'local-only-stream'))
+		assert.equal(run(['ls-remote', 'origin', 'refs/heads/local-only-stream']).trim(), '')
+		assert.match(run(['log', '-1', '--format=%s'], result.dir), /devlog: open stream local-only-stream/)
+		assert.equal(run(['status', '--porcelain'], result.dir).trim(), '')
+		assert.ok(logs.some((line) => line.includes('stream branch remains local; no remote push was attempted')))
+	} finally {
+		drop(dir, bare)
+	}
 })
 
 test('public new command works from an ordinary shell without host session markers', () => {
@@ -2605,7 +2625,7 @@ test('cleanup runs only the sweeping-up on an already merged stream', () => {
 
 test('cleanup pushes the merge and deletes the branch on the server', () => {
 	const { dir, run, bare } = make_repo({ remote: true })
-	open_stream(dir, 'login page')
+	open_stream(dir, 'login page', { publish: true })
 	const logs = []
 	agf.main(['cleanup', 'login-page'], dir, (m) => logs.push(m))
 	assert.ok(logs.some((l) => l.includes('pushed main to origin')))
@@ -2682,7 +2702,7 @@ test('cleanup refuses an ignored destination collision before merging a stream',
 
 test('cleanup stops before sweeping when fetch or default-branch push fails', () => {
 	const rejected = make_repo({ remote: true })
-	const rejected_wt = open_stream(rejected.dir, 'login page')
+	const rejected_wt = open_stream(rejected.dir, 'login page', { publish: true })
 	commit_stream_file(rejected.run, rejected_wt, 'app.txt', 'feature\n')
 	const hook = path.join(rejected.bare, 'hooks', 'pre-receive')
 	fs.writeFileSync(hook, '#!/bin/sh\nwhile read old new ref\ndo\n  case "$ref" in\n    refs/heads/main) printf "reject https://user:secret@example.test\\\\033[31m\\\\n" >&2; exit 1 ;;\n  esac\ndone\nexit 0\n', { mode: 0o755 })
@@ -2701,7 +2721,7 @@ test('cleanup stops before sweeping when fetch or default-branch push fails', ()
 	drop(rejected.dir, rejected.bare)
 
 	const fetched = make_repo({ remote: true })
-	const fetched_wt = open_stream(fetched.dir, 'login page')
+	const fetched_wt = open_stream(fetched.dir, 'login page', { publish: true })
 	const missing_remote = path.join(fetched.dir, 'missing-origin')
 	fetched.run(['remote', 'set-url', 'origin', missing_remote])
 	const fetch_logs = []
@@ -2796,7 +2816,7 @@ test('ditch refuses a folder registered to a different branch', () => {
 
 for (const command of ['ditch', 'cleanup']) for (const target of ['local', 'remote']) test(`${command} atomically preserves ${target} changes at deletion`, () => {
 	const { dir, run, bare } = make_repo({ remote: true })
-	const wt = open_stream(dir, 'login page')
+	const wt = open_stream(dir, 'login page', { publish: target === 'remote' })
 	const changed = run(['commit-tree', 'login-page^{tree}', '-p', 'login-page', '-m', 'concurrent work']).trim()
 	const wrapper = make_git_wrapper(`${target}-delete-race`)
 	const previous_path = process.env.PATH, previous_tip = process.env.AGF_TEST_UNVALIDATED_TIP
@@ -2844,7 +2864,7 @@ for (const command of ['ditch', 'cleanup']) test(`${command} refuses a different
 
 for (const mode of ['remote-inspection-failure', 'worktree-removal-failure']) test(`ditch stops after ${mode} and preserves both branches`, () => {
 	const { dir, run, bare } = make_repo({ remote: true })
-	const wt = open_stream(dir, 'login page')
+	const wt = open_stream(dir, 'login page', { publish: true })
 	const wrapper = make_git_wrapper(mode), previous_path = process.env.PATH
 	try {
 		process.env.PATH = `${wrapper.bin}${path.delimiter}${previous_path}`
@@ -2952,7 +2972,7 @@ test('ditch on yes deletes the worktree with unsaved work in it and the local br
 
 test('ditch deletes the branch on the server too', () => {
 	const { dir, bare } = make_repo({ remote: true })
-	open_stream(dir, 'login page')
+	open_stream(dir, 'login page', { publish: true })
 	const logs = []
 	agf.main(['ditch', 'login-page'], dir, (m) => logs.push(m), () => '\n')
 	assert.ok(logs.some((l) => l.includes('deleted branch login-page on origin')))
@@ -2974,7 +2994,7 @@ test('cleanup deletes the branch merge_back left ahead of its own upstream (remo
 	// never to origin/<key>. `git branch -d` compares against origin/<key> while it exists and
 	// refuses — so the remote branch must go first.
 	const { dir, run, bare } = make_repo({ remote: true })
-	const wt = open_stream(dir, 'login page')
+	const wt = open_stream(dir, 'login page', { publish: true })
 	fs.writeFileSync(path.join(wt, 'app.txt'), 'the feature\n')
 	run(['add', '-A'], wt)
 	run(['commit', '-m', 'feature work'], wt)

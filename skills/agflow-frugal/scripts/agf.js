@@ -1942,22 +1942,7 @@ const new_main = (argv, cwd, log, ask, width = 80) => {
 		if (!r.ok) { log(`git ${step[0]} failed:\n${r.out}`); return 1 }
 	}
 
-	const remote_listing = git(repo, ['remote'])
-	if (!remote_listing.ok) {
-		log(`could not inspect configured remotes before cleanup — nothing was changed`)
-		return 1
-	}
-	const has_remote = remote_listing.out !== ''
-	if (has_remote) {
-		const pushed = git(wt, ['push', '-u', 'origin', taskkey])
-		log(pushed.ok
-			? `pushed branch ${taskkey} to origin`
-			: pushed.timed_out
-				? `stream branch push timed out after ${git_timeout_limit(pushed)}ms; remote branch state is unknown and the local branch remains available`
-				: 'stream branch push failed; the local branch remains available')
-	} else {
-		log('no remote configured — nothing pushed')
-	}
+	log('stream branch remains local; no remote push was attempted')
 
 	log('')
 	log(`stream: ${taskkey} open`)

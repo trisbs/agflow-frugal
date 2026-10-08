@@ -100,6 +100,7 @@ test('allow_ag blocks publication before queue state is changed', () => {
 	fs.mkdirSync(tasks_dir)
 	try {
 		assert.throws(() => queue_contract.publish_queue(make_input({ tasks_dir, allow_ag: 'off' })), /allow_ag=off|blocks make-plans/i)
+		assert.throws(() => queue_contract.publish_queue(make_input({ tasks_dir, allow_ag: 'ask' })), /allow_ag=ask is awaiting owner approval.*present the frozen queue and ask whether to publish it.*do not write queue files until approval is recorded/i)
 		assert.deepEqual(fs.readdirSync(tasks_dir), [])
 	} finally {
 		dispose(root)

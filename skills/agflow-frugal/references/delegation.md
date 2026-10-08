@@ -22,7 +22,7 @@ Honor explicit owner executor and model choices. No-delegation or active fast-la
 
 Each profile has a unique id, literal `command`, priority 1–5, optional family, required `best`, `better`, `basic`, and `cheap` values, and optional custom tier names. Custom names are lowercase ASCII letters, digits, and hyphens; `off` is reserved. Values are `<full-model-id>/<effort>`. A requested tier skips profiles that lack it; if no eligible profile has it, use the original eligible profile's `basic` value and record `tier substitution: <requested> → basic` with the reason.
 
-`best` is for security/high-risk review, `better` for requirements/specification/acceptance, `basic` for implementation and bounded edits, and `cheap` for low-capability work or an explicitly manual quota probe. A session-limit response disables that profile for the current session and retries another eligible profile. If the owner explicitly selects an exact model or model-and-effort combination, an unavailable selection pauses for owner approval; never substitute another model automatically.
+`best` is for security/high-risk review, `better` for requirements/specification/acceptance, `basic` for implementation and bounded edits, and `cheap` for low-capability work or an explicitly manual quota probe. A session-limit response disables that profile and retries another eligible profile. If an owner-selected model/effort is unavailable, name it and viable choices, ask whether to use a specific alternative or stop, and wait; never substitute silently.
 
 Quota probes are optional, manual, and start in a fresh temporary directory containing no project instructions and no Git remote. If project files are essential, use a disposable no-remote clone with no push.
 

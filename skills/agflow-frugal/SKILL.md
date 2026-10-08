@@ -19,7 +19,7 @@ Incident citations explain failures. Approved redesigns may replace obsolete rem
 
 ## Persistent owner authorization
 
-- Requested project work needs no diff/commit approval; show diffs. Push, release, paid calls, and installed updates need explicit requests. Keep in `Task.md`.
+Exception: `/home/tristan/.codex/AGENTS.md` § `Code Change Approval`; no approval for in-scope edits/commits. Show diff. No push/release/paid/install absent request
 
 ## Start here
 
@@ -75,7 +75,7 @@ The Plus budget permits one external worker, delegation depth one, no parallel w
 
 Before answering or acting, save each submitted message in the current Ask, including diagnostic questions after interruption. Without a capture notice, run `notebook-write.js append-input --notebook <target-doc> --input-stdin` with the exact message. Use startup's repository-relative notebook value unchanged. Format paragraphs as `+ <user message>` with blank lines and indented continuations protecting pasted headings. No capture comments or added blockquotes. The loaded `UserPromptSubmit` hook captures automatically; hookless hosts add `--host <safe-id>` to that manual call. Queued text, tool output and hook notices are not owner submissions.
 
-`godev trace [full]`: Codex shows pending L0–L5 and colored class/model/worker markers; final uses same markers. Do not repeat cost in the result. No extra call or saved setting; CLI: `agf route plan|run|resume --trace[=full]`. Unknown facts stay unknown.
+`godev trace enable` persists until disable in ignored state (off by default). Toggles confirm; enable warns (~40–70 tokens/prompt); no extra call. `[full]` is one-shot. Show L0–L5/models; final class/model/status/count; plain keys, bold values, unknown explicit.
 
 Answer the entire current Ask in its saved Reply; question-only turns also close with `agf close --manifest-stdin`. A diagnostic follow-up does not cancel the unfinished task or require fresh permission for authorized work; resume it and close when its existing gates pass, unless the owner cancels or replaces it. When explaining commands, compare the loaded rule with actual output; distinguish required checks, your mistakes, and genuine instruction gaps.
 
@@ -154,7 +154,7 @@ Answer the entire current Ask in its saved Reply; question-only turns also close
 
 - A standalone “make a plan” or “show me a plan first” requests plan delivery before implementation. Treat “make a plan before implementation” as a planning checkpoint unless the owner clearly authorizes proceeding. Save the plan and wait at a requested checkpoint, regardless of task risk.
 
-- When planning and implementation are already authorized, save the plan and continue unless the owner adds a review or wait condition. Ordinary plan approval may be plain language such as “go ahead”; consequential work retains its exact Design Go and Result Go gates. Exact command workflows such as `make-plans` retain their own stop rules.
+- At an owner gate, state the blocked action, reason, exact decision and what it authorizes; ask clearly and pause dependent work. Separate approval from pending checks. Consequential work needs Design Go before edits and Result Go after evidence. Preserve exact-command gates; ordinary plan approval may be “go ahead.”
 
 ## Writing styles protocol
 

@@ -307,7 +307,7 @@ const validate_contract_gate = input => {
 	const allow_ag = input?.allow_ag ?? contract.allow_ag
 	if (allow_ag !== undefined && !['on', 'off', 'ask'].includes(allow_ag)) errors.push('allow_ag must be on, off, or ask')
 	if (operation === 'make-plans' && allow_ag === 'off') errors.push('allow_ag=off blocks make-plans before queue publication')
-	if (operation === 'make-plans' && allow_ag === 'ask' && input?.owner_confirmation !== 'approved' && contract.owner_confirmation !== 'approved') errors.push('allow_ag=ask requires recorded approval before queue publication')
+	if (operation === 'make-plans' && allow_ag === 'ask' && input?.owner_confirmation !== 'approved' && contract.owner_confirmation !== 'approved') errors.push('allow_ag=ask is awaiting owner approval: present the frozen queue and ask whether to publish it; do not write queue files until approval is recorded')
 
 	const normalized = {
 		...clone(contract),

@@ -222,7 +222,7 @@ const lint_route_decision = facts => {
     return make_check('route_decision', 'Route decision is explicit and safe', 'fail', 'allow_ag=off blocks selected-advisor and full-pipeline work before Agentflow starts');
   }
   if (facts.allow_ag === 'ask' && ['selected_advisors', 'full_pipeline'].includes(facts.route) && facts.owner_confirmation !== 'approved') {
-    return make_check('route_decision', 'Route decision is explicit and safe', 'fail', 'allow_ag=ask requires owner_confirmation=approved before Agentflow starts');
+    return make_check('route_decision', 'Route decision is explicit and safe', 'fail', `allow-ag: ask is waiting for owner approval: ask whether to run ${facts.route} for ${facts.operation}; reason: ${facts.reason}. Keep it blocked and record approval before Agentflow starts`);
   }
   if (facts.route === 'direct' && facts.owner_confirmation !== 'not_required') {
     return make_check('route_decision', 'Route decision is explicit and safe', 'fail', 'direct work must not ask for Agentflow confirmation');
@@ -1542,7 +1542,12 @@ const lint_quality_gate = (facts, devlog_text, project_root, metadata_context = 
   if (facts.design_decision === 'stop') {
     errors.push('Design Stop keeps consequential implementation blocked');
   } else if (facts.design_decision === 'pending') {
-    errors.push('Design Go is still pending');
+    const latest_plan_reply = plan_replies.at(-1);
+    if (facts.plan_only === true && quality_valid_commit(plan_commit) && latest_plan_reply !== undefined && quality_decision_commit(latest_plan_reply) === plan_commit) {
+      errors.push(`Design Go is still pending for plan ${plan_commit}; ask the owner: "Design Go: ${plan_commit.slice(0, 7)}" to authorize source edits, or request Design Stop; keep source untouched until answered`);
+    } else {
+      errors.push('Design Go is not ready to request: first finish the plan-only Reply and record its commit; then present the exact Design Go line and what it authorizes before source edits');
+    }
   } else if (facts.design_decision === 'go' && quality_valid_commit(plan_commit)) {
     const latest_plan_reply = plan_replies.at(-1);
     const matching_design_go = design_decisions
@@ -1560,7 +1565,16 @@ const lint_quality_gate = (facts, devlog_text, project_root, metadata_context = 
   if (facts.result_decision === 'stop') {
     errors.push('Result Stop keeps consequential completion blocked');
   } else if (facts.result_decision === 'pending') {
-    errors.push('Result Go is still pending');
+    const result_evidence_ready = quality_valid_commit(final_commit)
+      && quality_is_object(journey) && journey.red_proven === true && journey.green_proven === true && journey.implementation_commit === final_commit
+      && quality_is_object(review) && review.implementation_commit === final_commit
+      && ['outcome', 'minimality', 'conformance'].every(name => review[name] === 'pass')
+      && facts.host_gate === 'pass';
+    if (result_evidence_ready) {
+      errors.push(`Result Go is still pending for reviewed commit ${final_commit}; present the review and verification, then ask the owner: "Result Go: ${final_commit}"; keep consequential closeout blocked until answered`);
+    } else {
+      errors.push('Result Go is not ready to request: first pass the normal journey, review and host gate; then present the reviewed implementation commit and exact Result Go line to the owner');
+    }
   } else if (facts.result_decision === 'go' && quality_valid_commit(final_commit)) {
     const latest_result_reply = result_replies.at(-1);
     const matching_result_go = result_decisions

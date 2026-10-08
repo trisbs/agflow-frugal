@@ -33,11 +33,50 @@ test('the always-loaded skill stays within the retained 32 KiB budget', () => {
 	assert.match(read('skills/agflow-frugal/references/closeout.md'), /"allowed_paths"/)
 })
 
-test('prompt trace is a one-command routed run control with honest unknowns', () => {
+test('prompt trace supports persistent checkout-local mode and compatible one-shot control', () => {
 	const skill = read('skills/agflow-frugal/SKILL.md')
-	assert.match(skill, /`godev trace \[full\]`: Codex shows pending L0–L5 and colored class\/model\/worker markers/u)
-	assert.match(skill, /do not repeat cost in the result/iu)
-	assert.match(skill, /No extra call or saved setting.*Unknown facts stay unknown/iu)
+	const hook = read('skills/agflow-frugal/scripts/stop-hook.js')
+	const docs = read('skills/agflow-frugal/scripts/README.md')
+	assert.match(skill, /`godev trace enable` persists until disable in ignored state/u)
+	assert.match(skill, /`\[full\]` is one-shot/u)
+	assert.match(skill, /40–70 tokens\/prompt/u)
+	assert.match(skill, /unknown explicit/u)
+	assert.match(hook, /\.agentflow', '\.tmp', 'trace-mode\.json'/u)
+	assert.match(docs, /defaults off, survives prompts\/restarts, and is not shared with other checkouts/u)
+})
+
+test('prompt status distinguishes explicit approval gates from work and blockers', () => {
+	const skill = read('skills/agflow-frugal/SKILL.md')
+	const hook = read('skills/agflow-frugal/scripts/stop-hook.js')
+	const readme = read('skills/agflow-frugal/scripts/README.md')
+	assert.match(hook, /const status_prompt = prompt => .*godev\\s\+status/u)
+	assert.match(hook, /latest RUN\/Reply\).*Awaiting owner approval.*Awaiting work\/checks.*Blocked/is)
+	assert.match(hook, /Never infer approval from unfinished work or stale STATUS/u)
+	assert.match(readme, /exact `godev status`.*directly linked.*does not infer approval/u)
+})
+
+test('consequential Go gates ask for the exact owner decision and explain its effect', () => {
+	const skill = read('skills/agflow-frugal/SKILL.md')
+	const streams = read('skills/agflow-frugal/references/streams.md')
+	const delegation = read('skills/agflow-frugal/references/delegation.md')
+	const pipeline = read('skills/agflow-frugal/references/ag.md')
+	const closeout = read('skills/agflow-frugal/references/closeout.md')
+	assert.match(skill, /At an owner gate, state the blocked action, reason, exact decision and what it authorizes; ask clearly and pause dependent work.*Separate approval from pending checks.*Design Go before edits and Result Go after evidence/iu)
+	assert.match(streams, /For `ask`, state the trigger.*ask whether to create the stream.*wait for an affirmative answer/i)
+	assert.match(delegation, /owner-selected model\/effort is unavailable, name it and viable choices, ask whether to use a specific alternative or stop, and wait/i)
+	assert.match(pipeline, /`ask` blocks complex pipeline jobs until the owner decides.*State the trigger, named questions, reason and route, ask whether to proceed/i)
+	assert.match(closeout, /ask the owner for exactly `Result Go: <full-commit>` or `Result Stop: <reason>`.*explain.*Go permits consequential closeout.*Stop keeps it blocked/i)
+})
+
+test('project authorization overrides the global diff-approval rule and names the L3 display', () => {
+	const project_policy = read('AGENTS.md')
+	const task = read('Task.md')
+	const skill = read('skills/agflow-frugal/SKILL.md')
+	assert.match(project_policy, /global instruction file `\/home\/tristan\/\.codex\/AGENTS\.md`, under `## Code Change Approval`/u)
+	assert.match(project_policy, /authorized without per-diff or per-commit approval.*do not wait for approval or require `CMD:auto-approve`/is)
+	assert.match(project_policy, /push.*release.*paid.*installed/isu)
+	assert.match(skill, /Exception: `\/home\/tristan\/\.codex\/AGENTS\.md` § `Code Change Approval`/i)
+	assert.match(task, /TASK CLASS: \*\*L3 — Basic Direct\*\*.*CURRENT MODEL: \*\*.*WORKER MODEL\/STATUS: \*\*.*WORKERS STARTED:/s)
 })
 
 test('the always-loaded skill routes advanced machinery on demand', () => {
