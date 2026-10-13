@@ -18,7 +18,7 @@ Agentflow 幫你的 AI 助理準備一本專案筆記。你交代的事情、做
 
 每個進行中的筆記回合只由一個工作階段寫入。另一個工作階段會在修改需求或進度前停止，即使 streams 已關閉也一樣。通用助理必須保留唯一的 `--session <id>`，並在啟動、記錄輸入、寫入進度和完成回合時，與 `--host <id>` 一起傳入；新的獨立工作階段要使用新的 ID。原生助理使用目前工作階段的身分；指令環境沒有提供時，需明確傳入該身分。
 
-若上一回合已完成並釋放所有權，你先填好下一個連號 Ask，再要求 Agentflow 啟動或繼續，啟動程序就會取得該 Ask 的所有權，不必再次確認。沒有這項釋放紀錄的舊版未完成筆記，或仍由其他工作階段持有的 Ask，則先執行 `agf owner inspect --notebook <path>`，再依你的接手授權執行 `agf owner adopt --notebook <path> --ask <A-NNN> --expect <token|unowned> --sha256 <hash> --host <host> --session <id>`，填入剛查到的值。既有授權即可，不必重問；Agentflow 不會因閒置時間或程序停止而自動接手。
+若上一回合已完成並釋放所有權，你先填好下一個連號 Ask，再要求 Agentflow 啟動或繼續，啟動程序就會取得該 Ask 的所有權，不必再次確認。從 Codex 或 Claude 明確輸入 `godev` 啟動，也能接手目前由其他工作階段持有的未完成 Ask，不必手動複製 token 或 hash；啟動會確認上鎖前讀取的 owner token 與筆記 hash 沒有變更、記錄交接並封鎖舊工作階段。若狀態已變更，請用最新狀態重試 `godev`。舊版未完成筆記或其他主機的交接仍須先執行 `agf owner inspect --notebook <path>`，再依既有接手授權執行 `agf owner adopt --notebook <path> --ask <A-NNN> --expect <token|unowned> --sha256 <hash> --host <host> --session <id>`。Agentflow 不會依閒置時間或程序停止推測可以接手。
 
 在終端機輸入以下指令，安裝 skill：
 

@@ -193,7 +193,7 @@ const first_stream_request = (info, text, parsed) => {
   return before !== null && after !== null && result.stdout.slice(0, before.body_start) === text.slice(0, after.body_start);
 };
 
-const guard = ({ root = process.cwd(), notebook, text, host, session, ask, workspace, allow_missing = false, allow_closed = false, resume_unclaimed = false, resume_active = false } = {}) => {
+const guard = ({ root = process.cwd(), notebook, text, host, session, ask, workspace, allow_missing = false, allow_closed = false, resume_unclaimed = false, resume_active = false, resume_snapshot } = {}) => {
   const who = identity({ host, session });
   const info = location({ root, notebook, workspace });
   const stream = linked_worktree(info.root);
@@ -215,11 +215,16 @@ const guard = ({ root = process.cwd(), notebook, text, host, session, ask, works
   const closed_target = allow_closed && parsed.some(round => round.id === target && round.reply_text.trim());
   if (record && record.ask === target && (record.state === 'active' || closed_target)) {
     if (record.host !== who.host || record.session !== who.session) {
-      if (resume_active === true && who.host === 'codex' && record.host === who.host && record.state === 'active' && target === current.id && !current.reply_text.trim()) {
+      if (resume_active === true && ['codex', 'claude'].includes(who.host) && ['codex', 'claude'].includes(record.host) && record.state === 'active' && target === current.id && !current.reply_text.trim()) {
+        const current_hash = crypto.createHash('sha256').update(text).digest('hex');
+        const prior = resume_snapshot?.owner;
+        if (!prior || prior.state !== 'active' || prior.ask !== current.id || prior.token !== record.token || prior.host !== record.host || prior.session !== record.session || resume_snapshot.ask !== current.id || resume_snapshot.sha256 !== current_hash) {
+          fail('handoff precondition changed; retry `godev` against the current notebook and owner state');
+        }
         const transferred = transfer({
           root: info.root, notebook: info.notebook, host: who.host, session: who.session,
-          ask: current.id, expected: record.token,
-          sha256: crypto.createHash('sha256').update(text).digest('hex'),
+          ask: current.id, expected: prior.token,
+          sha256: resume_snapshot.sha256,
           reason: 'godev-start',
         });
         return { ...info, record: transferred.owner, identity: who, handoff: { from: { host: record.host, session: record.session }, to: { host: who.host, session: who.session } } };

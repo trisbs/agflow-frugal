@@ -12,6 +12,12 @@ const ids = { A: '11111111-1111-4111-8111-111111111111', B: '22222222-2222-4222-
 const environment = id => ({ ...process.env, CODEX_THREAD_ID: ids[id], CODEX_SESSION_ID: ids[id], CLAUDE_SESSION_ID: '', CLAUDE_PROJECT_DIR: '', AGENTFLOW_SESSION_ID: '' });
 const command = (root, script, args, input, id = 'A') => spawnSync(process.execPath, [path.join(__dirname, script), ...args], { cwd: root, env: environment(id), input, encoding: 'utf8' });
 const start = (root, id, input = `request ${id}`) => command(root, 'agf.js', ['start', '--repo', root, '--host', 'codex', '--message-stdin', '--json'], input, id);
+const claude_start = (root, id, input) => spawnSync(process.execPath, [path.join(__dirname, 'agf.js'), 'start', '--repo', root, '--host', 'claude', '--message-stdin', '--json'], {
+  cwd: root,
+  env: { ...process.env, CODEX_THREAD_ID: '', CODEX_SESSION_ID: '', CLAUDE_CODE_SESSION_ID: ids[id], CLAUDE_SESSION_ID: ids[id], AGENTFLOW_SESSION_ID: '' },
+  input,
+  encoding: 'utf8',
+});
 const fixture = git => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agf-notebook-owner-')));
   if (git) assert.equal(spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: root }).status, 0);
@@ -69,7 +75,7 @@ test('Codex godev startup automatically inherits an active Ask and records the h
     cwd: root, hook_event_name: 'UserPromptSubmit', session_id: ids.B, turn_id: 'continue-1', prompt: 'godev continue the current task',
   }), 'B');
   assert.equal(hook.status, 0, hook.stderr);
-  assert.match(JSON.parse(hook.stdout).hookSpecificOutput.additionalContext, /normal `agf start` workflow.*atomically inherit.*without a separate authentication prompt/u);
+  assert.match(JSON.parse(hook.stdout).hookSpecificOutput.additionalContext, /normal `agf start` workflow.*atomically inherit.*No separate authentication prompt/u);
   assert.deepEqual(state(root), hook_before, 'the prompt hook must not transfer ownership itself');
 
   const continuation = start(root, 'B', 'godev continue the current task');
@@ -95,6 +101,85 @@ test('Codex godev startup automatically inherits an active Ask and records the h
   const unmarked = start(root, 'C', 'please continue without the godev command');
   assert.notEqual(unmarked.status, 0);
   assert.deepEqual(state(root), before_unmarked);
+});
+
+test('Claude godev startup takes over a Codex-owned open Ask and fences the previous host', () => {
+  const root = fixture(false);
+  const handoff_hook = spawnSync(process.execPath, [path.join(__dirname, 'stop-hook.js'), '--host', 'claude'], {
+    cwd: root,
+    env: { ...process.env, CODEX_THREAD_ID: '', CODEX_SESSION_ID: '', CLAUDE_CODE_SESSION_ID: ids.B, CLAUDE_SESSION_ID: ids.B, AGENTFLOW_SESSION_ID: '' },
+    input: JSON.stringify({ cwd: root, hook_event_name: 'UserPromptSubmit', session_id: ids.B, turn_id: 'cross-host', prompt: 'godev continue this task' }),
+    encoding: 'utf8',
+  });
+  assert.equal(handoff_hook.status, 0, handoff_hook.stderr);
+  assert.match(JSON.parse(handoff_hook.stdout).hookSpecificOutput.additionalContext, /atomically inherit the open native-host task.*No separate authentication prompt/u);
+  assert.equal(require('./notebook-owner').inspect({ root, notebook }).owner.host, 'codex', 'the prompt hook itself cannot transfer ownership');
+
+  const result = claude_start(root, 'B', 'godev continue this task');
+  assert.equal(result.status, 0, result.stderr);
+  const started = JSON.parse(result.stdout);
+  assert.deepEqual(started.message.owner_handoff, {
+    from: { host: 'codex', session: ids.A },
+    to: { host: 'claude', session: ids.B },
+  });
+  const owner = require('./notebook-owner');
+  const after = owner.inspect({ root, notebook }).owner;
+  assert.equal(after.host, 'claude');
+  assert.equal(after.session, ids.B);
+  assert.equal(after.handoffs.at(-1).trigger, 'godev-start');
+  assert.match(read(root), /godev continue this task/u);
+  const foreign_hook = spawnSync(process.execPath, [path.join(__dirname, 'stop-hook.js'), '--host', 'claude'], {
+    cwd: root,
+    env: { ...process.env, CODEX_THREAD_ID: '', CODEX_SESSION_ID: '', CLAUDE_CODE_SESSION_ID: ids.C, CLAUDE_SESSION_ID: ids.C, AGENTFLOW_SESSION_ID: '' },
+    input: JSON.stringify({ cwd: root, hook_event_name: 'UserPromptSubmit', session_id: ids.C, turn_id: 'claude-continue', prompt: 'godev continue this task' }),
+    encoding: 'utf8',
+  });
+  assert.equal(foreign_hook.status, 0, foreign_hook.stderr);
+  assert.match(JSON.parse(foreign_hook.stdout).hookSpecificOutput.additionalContext, /atomically inherit the open native-host task.*No separate authentication prompt/u);
+  const stale_writer = command(root, 'notebook-write.js', ['append-input', '--notebook', notebook, '--host', 'codex', '--input-stdin'], 'previous Codex owner write', 'A');
+  assert.notEqual(stale_writer.status, 0);
+  assert.match(stale_writer.stderr, /belongs to claude session/u);
+  assert.doesNotMatch(read(root), /previous Codex owner write/u);
+});
+
+test('an outdated pre-lock owner token or notebook hash cannot transfer an active Ask', () => {
+  const root = fixture(false);
+  const owner = require('./notebook-owner');
+  const before = owner.inspect({ root, notebook });
+  const changed = read(root).replace('request A', 'request changed');
+  fs.writeFileSync(path.join(root, notebook), changed);
+  const saved_owner = before.owner;
+  assert.throws(() => owner.guard({
+    root, notebook, text: changed, host: 'claude', session: ids.B,
+    resume_active: true, resume_snapshot: before,
+  }), /handoff precondition changed.*retry `godev`/u);
+  assert.deepEqual(owner.inspect({ root, notebook }).owner, saved_owner);
+  assert.equal(read(root), changed);
+
+  const second_root = fixture(false);
+  const second_snapshot = owner.inspect({ root: second_root, notebook });
+  const saved_identity = { thread: process.env.CODEX_THREAD_ID, session: process.env.CODEX_SESSION_ID };
+  process.env.CODEX_THREAD_ID = ids.C;
+  process.env.CODEX_SESSION_ID = ids.C;
+  try {
+    owner.transfer({
+      root: second_root, notebook, host: 'codex', session: ids.C,
+      ask: second_snapshot.ask, expected: second_snapshot.owner.token, sha256: second_snapshot.sha256,
+    });
+  } finally {
+    if (saved_identity.thread === undefined) delete process.env.CODEX_THREAD_ID;
+    else process.env.CODEX_THREAD_ID = saved_identity.thread;
+    if (saved_identity.session === undefined) delete process.env.CODEX_SESSION_ID;
+    else process.env.CODEX_SESSION_ID = saved_identity.session;
+  }
+  const after_transfer = owner.inspect({ root: second_root, notebook }).owner;
+  const second_text = read(second_root);
+  assert.throws(() => owner.guard({
+    root: second_root, notebook, text: second_text, host: 'claude', session: ids.B,
+    resume_active: true, resume_snapshot: second_snapshot,
+  }), /handoff precondition changed.*retry `godev`/u);
+  assert.deepEqual(owner.inspect({ root: second_root, notebook }).owner, after_transfer);
+  assert.equal(read(second_root), second_text);
 });
 
 test('concurrent owner transfers using one inspected token accept only one claimant', async () => {

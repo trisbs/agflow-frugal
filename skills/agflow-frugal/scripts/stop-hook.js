@@ -207,9 +207,9 @@ const main = () => {
     } catch (error) {
       if (error.code !== 'AG_NOTEBOOK_OWNER') throw error;
       // Refuse unauthorized notebook writes, not delivery of the owner's request.
-      const continuing_codex_task = active_host === 'codex' && /^\s*\/?godev(?:\s|$)/iu.test(String(input.prompt || '')) && /belongs to codex session/u.test(error.message);
-      const ownership_guidance = continuing_codex_task
-        ? ' Continue through the normal `agf start` workflow with this exact owner message; a `godev` start will atomically inherit the open Codex task and record the handoff without a separate authentication prompt. Do not edit owner metadata directly.'
+      const continuing_native_task = ['codex', 'claude'].includes(active_host) && /^\s*\/?godev(?:\s|$)/iu.test(String(input.prompt || '')) && /belongs to (?:codex|claude) session/u.test(error.message);
+      const ownership_guidance = continuing_native_task
+        ? ' Continue through the normal `agf start` workflow with this exact owner message; a `godev` start from Codex or Claude will atomically inherit the open native-host task when its owner-token and notebook-hash snapshot is still current. No separate authentication prompt is needed. Do not edit owner metadata directly.'
         : ' Do not mutate this notebook or adopt ownership without resolving the ownership conflict. Inspect ownership before notebook recovery.';
       process.stdout.write(JSON.stringify({ ...(trace.systemMessage ? { systemMessage: trace.systemMessage } : {}), hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',

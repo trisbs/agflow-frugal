@@ -46,13 +46,23 @@ For work the owner clearly requests within this project, do not pause for per-di
 
 Verified: the complete Agentflow script suite passed 1,442 tests with 29 environment-specific skips outside the restricted process sandbox; the focused empty-ancestor `.git` `EPERM` regression also passed. The always-loaded skill now fits the 32 KiB budget (32,371 bytes), and its prompt-compression test passes. No installed copy was changed and no release or publish occurred.
 
-## P1 — Simplify unfinished-work handoff for remote sessions — proposed
+## P1 — Simplify unfinished-work handoff for remote sessions — implementation complete, closeout pending
 
 **Reason:** the current session-owner flow adds host/session identity, owner inspection, token/hash preconditions, and explicit adoption steps that make it cumbersome for a new or remote session to continue ordinary unfinished work. The upstream Agentflow model is simpler: recover from the shared notebook's STATUS and last round, while keeping one writer per notebook.
 
-**Status: design committed as `ad4fa53`; awaiting exact `Design Go`.** The proposed design is `.agentflow/artifacts/A-003-remote-handoff/design.md`. It extends explicit `godev` startup handoff to supported native hosts, using a pre-lock owner-token/notebook-hash snapshot rechecked under the startup lock. Competing stale claimants must not both win; ordinary writes and hooks do not transfer ownership. No source implementation has started. The current automatic handoff remains Codex-only until the design is approved and implemented.
+**Status: Design Go received for `ad4fa53` on 2026-10-13; implementation and deterministic checks are complete.** The design is `.agentflow/artifacts/A-003-remote-handoff/design.md`. Codex or Claude `godev` startup now transfers an actively owned open Ask only when the owner-token and notebook-hash snapshot taken before startup locks still matches under lock. Startup records the transfer and fences the former session; hooks only explain the startup path and never transfer ownership. The exact implementation commit and review result will be recorded in the A-003 Reply; consequential closeout still awaits `Result Go`.
 
 **Acceptance:** a fresh/remote session can resume an unfinished Ask by reading the canonical notebook and following its current STATUS/last round, without owner authentication or manual token/hash copying; the previous writer is clearly prevented from concurrently changing the same Ask; ordinary same-session continuation remains unchanged; competing simultaneous writers are deterministically handled; tests cover fresh-session resume, genuine concurrent-write conflict, and recovery after interruption. Do not update the installed copy automatically.
+
+## P2 — Review current workflow stop and compare with upstream Agentflow — completed 2026-10-13
+
+**Owner request:** review the current workflow and its stop point, then compare them with original Agentflow.
+
+**Findings:** the latest recorded pre-implementation stop was the consequential design gate `Design Go: ad4fa53`; the owner supplied that exact gate on 2026-10-13, authorizing implementation. The design transfers an unfinished Ask at explicit `godev` startup only after rechecking owner token and notebook hash under lock. STATUS still says closeout is blocked by missing external cross-check and a matching push-result claim, but RUN-037 was the last pre-this-round record and identifies the design gate as its stop. Treat the closeout sentence as stale until a fresh close attempt proves otherwise. After this implementation and review, the current consequential stop is `Result Go`; no push is authorized.
+
+**Upstream comparison:** the imported original Agentflow snapshot is commit `4b4a31a` (upstream `agfnow/agentflow` commit `8527813`). Its simpler recovery reads STATUS and the last Ask/Reply, without this fork's persistent host/session ownership and token/hash transfer machinery. It also does not impose the current consequential `Design Go` / `Result Go` sequence in the inspected skill/pipeline text. Frugal adds stronger single-writer fencing and structured independent-review/closeout evidence; those safeguards explain the added stops but create more handoff and completion friction. Upstream documentation alone does not prove it would avoid every nested-process or ownership failure.
+
+**Task outcome:** comparison recorded; the owner has since supplied `Design Go: ad4fa53`, and the approved handoff change is implemented and verified. The current-model attribution issue remains open.
 
 ## P1 — Prompt-enabled per-run routing trace — completed 2026-10-08
 

@@ -842,7 +842,7 @@ const emit_start_result = (result, args, repo, log) => {
 	log(`notebook: ${result.notebook}`)
 	log(`setup: ${result.setup.created ? 'initialized' : 'already complete'}`)
 	log(`owner message: ${result.message.inserted ? 'recorded' : 'already present'}`)
-	if (result.message.owner_handoff) log(`owner: continued from Codex session ${result.message.owner_handoff.from.session}`)
+	if (result.message.owner_handoff) log(`owner: continued from ${result.message.owner_handoff.from.host} session ${result.message.owner_handoff.from.session}`)
 	if (result.hooks.status === 'not_available') {
 		log('hooks: not_available')
 		log(`manual capture: ${result.hooks.instructions.capture}`)
@@ -882,6 +882,10 @@ const start_main = (argv, cwd, log, _ask, _width = 80) => {
 		if (!fs.existsSync(config_file)) throw new Error('stream configuration is missing; restore its notebook/configuration pair before intake')
 	}
 	if (fs.existsSync(config_file) && !fs.existsSync(path.join(repo, configured_target))) throw new Error(`configured notebook ${configured_target} is missing; restore it or repair the pair explicitly`)
+	const resume_active = ['codex', 'claude'].includes(args.host) && is_godev_command(message)
+	const resume_snapshot = resume_active && fs.existsSync(path.join(repo, configured_target))
+		? notebook_owner.inspect({ root: repo, notebook: configured_target })
+		: undefined
 	let lock = acquire_start_lock(repo)
 	if (lock.existing) {
 		const intake = resume_intake.collect_intake({ repo_root: repo, notebook_path: configured_target, active_host: args.host, ...(args.host_family ? { host_family: args.host_family } : {}), interrupted_start: true })
@@ -904,7 +908,7 @@ const start_main = (argv, cwd, log, _ask, _width = 80) => {
 	try {
 		const guarded_file = notebook_owner.safe_path(repo, configured_target, true)
 		input_lock = notebook_writer.acquire_close_round_lock(`${guarded_file}.close-round.lock`)
-		const ownership = notebook_owner.guard({ root: repo, notebook: configured_target, host: args.host, session: args.session, allow_missing: true, resume_unclaimed: true, resume_active: args.host === 'codex' && is_godev_command(message) })
+		const ownership = notebook_owner.guard({ root: repo, notebook: configured_target, host: args.host, session: args.session, allow_missing: true, resume_unclaimed: true, resume_active, resume_snapshot })
 		const before_paths = start_snapshot_paths(repo, args.host, configured_target)
 		const before = new Map(before_paths.map(relative => [relative, start_file_identity(path.join(repo, relative))]))
 		const initialized = fs.existsSync(config_file)
