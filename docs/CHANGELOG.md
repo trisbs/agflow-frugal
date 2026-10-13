@@ -1,6 +1,30 @@
 # Changelog
 
-Notable Agentflow changes, with the newest version first. Release metadata uses major.minor.patch; the current release is 8.3.3. Earlier dates identify recorded source milestones, not independently verified public publication dates.
+Notable Agentflow Frugal changes, with the newest version first. Release metadata uses major.minor.patch; the current release is 8.4.0. Agentflow Frugal v8.4.0 is based on upstream Agentflow v8.3.3. Earlier dates identify recorded source milestones, not independently verified public publication dates.
+
+## [8.4.0]
+
+### Added
+
+- An opt-in, compatibility-first Frugal profile for ChatGPT Plus usage. Domain-neutral L0–L5 routing sends bounded verified work directly to Light, keeps meaningful reasoning in one Medium context, and reserves Debate for exceptional material disagreement.
+
+- Deterministic usage budgets, review and Debate gates, and optional version-1 telemetry records. The profile does not make model calls or write state while classifying work.
+
+- A documented measurement model for calls per accepted completion. It distinguishes modeled savings from observed production results.
+
+### Changed
+
+- Existing callers retain upstream cross-check behavior unless they supply optional Plus-specific facts, preserving compatibility.
+
+- Installation instructions now point to `trisbs/agflow-frugal` and identify this project as a fork of upstream Agentflow v8.3.3.
+
+### Fixed
+
+- Persistent Codex trace controls now work in clean non-Git folders when the `UserPromptSubmit` hook is loaded, even without an Agentflow devlog. Trace state remains local to the folder. Hook registration still follows its configured scope; this release does not install a global hook automatically.
+
+- Trace reports use only the exact model slug supplied by the current host hook and report `unavailable` when that value is absent or invalid.
+
+- Stop reports identify whether work completed, what happened, the actual blocker or error, and the concrete owner action and next step. Historical push descriptions no longer count as current successful pushes during closeout.
 
 ## [8.3.3]
 
