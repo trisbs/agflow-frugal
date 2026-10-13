@@ -6,15 +6,15 @@ Notebook: .agentflow/devlog.md — root.
 
 Current commit: local delivery recorded in Git history.
 
-Tests/scenarios: Source 1467 passed, 29 skipped; installed recovery 25/25; installed shortcut/terminal 219 passed, 22 skipped; clean-folder trace tests.
+Tests/scenarios: A-004 source suite 1467 passed/29 skipped; installed recovery 25/25; installed shortcut/terminal 219 passed/22 skipped; independent review passed.
 
 Configuration: ag.json — schema v8; validated for codex this round.
 
-Proven: A-004 closed locally; commit a69f10b0be98864e76653f4fc92504c4c2c55795 independently reviewed with all three verdicts PASS.
+Proven: A-004 candidate and local closeout complete; code commit a69f10b0be98864e76653f4fc92504c4c2c55795 has independent Outcome, Minimality, and Conformance PASS.
 
-Open: Public release/push needs a separate request; global hook-scope alignment remains owner-deferred.
+Open: Phase 10 public release awaits explicit authorization; push/publication also require separate authorization; global hook-scope alignment is owner-deferred.
 
-Next: Restart Codex to load project hooks; disable persistent tracing if desired; request public release separately if wanted.
+Next: Await explicit Phase 10 release request; persistent trace can be disabled with godev trace disable.
 
 Artifacts: .agentflow/artifacts/A-004-trace-review/review-report.md; Task.md; docs/CHANGELOG.md.
 
@@ -348,5 +348,60 @@ Resumed Phase 10 release readiness after the owner re-enabled persistent tracing
 ---
 
 # → Ask / A-005 (tristan)
+
++ godev continue
+
+---
+
+## [RUN-001] Event — 2026-10-13 18:07:53 +0800 (A-005)
+
+- Startup resumed A-005 at commit `f6a6258bec08766acbae6dd4dd5c5e08d1c03d04`; configuration is valid and `hooks_restart_required` is false.
+
+## [RUN-002] Event — 2026-10-13 18:07:53 +0800 (A-005)
+
+- STATUS and Task.md show no remaining authorized code task; Phase 10 public release awaits a separate explicit owner request. Hook/install-scope alignment remains closed by owner direction with implementation deferred.
+
+## [RUN-003] Event — 2026-10-13 18:07:53 +0800 (A-005)
+
+- Preserved unrelated `.agentflow/devlog.archive.md` and `skills/agflow-frugal/.setup-checked`; no source edit, test, tag, push, or publication was performed.
+
+# ← Reply / A-005
+
+* _2026-10-13 18:07:53 +0800 (gpt-6-luna/low)_
+
+## [SUMMARY]
+
+- There is no remaining authorized code task. The 8.4.0 candidate and its local closeout are complete; public release is still awaiting your separate request.
+- This startup reports `hooks_restart_required: false`; no restart is currently required.
+
+## [FINAL REPORT]
+
+1. Continue the remaining work.
+
+   - A-004 closed locally at code commit `a69f10b0be98864e76653f4fc92504c4c2c55795`, with its notebook/review closeout committed as `f6a6258bec08766acbae6dd4dd5c5e08d1c03d04`.
+   - The independent review passed all three verdicts. The source and installed verification results are recorded in the A-004 Reply and review report.
+   - No release, tag, push or publication has occurred.
+
+2. Remaining tasks and scope.
+
+   - The P0 actionable-stop guidance, workflow comparison, cross-session handoff, persistent-only trace, clean-folder handler, and exact model reporting are complete.
+   - Hook/install-scope alignment was closed at your direction with implementation deferred. The Agentflow skill is installed globally, but its Codex hook is project-scoped; no global hook was installed.
+   - Phase 10 public release remains gated on your explicit release request. Push and publication also require separate authorization.
+
+3. Trace and host state.
+
+   - Persistent trace remains enabled for this checkout at `.agentflow/.tmp/trace-mode.json`; use `godev trace disable` to turn it off.
+   - Startup reports no host restart is required now. Unrelated `.agentflow/devlog.archive.md` and `skills/agflow-frugal/.setup-checked` paths were left untouched.
+
+## Questions (batched — each with a suggested default)
+
+1. Do you authorize starting Phase 10 public release work for version 8.4.0? This does not authorize a push or publication.
+
+   - Suggested default: Leave the reviewed candidate local until you request release work.
+   - ans:
+
+---
+
+# → Ask / A-006 (tristan)
 
 +
