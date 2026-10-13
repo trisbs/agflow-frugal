@@ -1879,8 +1879,9 @@ const assertive_clauses = text => text
   .join('\n');
 
 const lint_push_claim = (devlog_text, terminal_output, push) => {
-  const last_round = parse_devlog(devlog_text).last_round;
-  const claim_text = assertive_clauses(`${terminal_output === undefined ? '' : terminal_output}\n${last_round}`);
+  const parsed_devlog = parse_devlog(devlog_text);
+  const current_round = parsed_devlog.rounds.find(round => round.text === parsed_devlog.last_round);
+  const claim_text = assertive_clauses(`${terminal_output === undefined ? '' : terminal_output}\n${current_round?.reply_text ?? ''}`);
 
   if (!push_claim_pattern.test(claim_text)) {
     return make_check('push_claim_valid', 'Push claim is valid', 'pass', 'no push-success claim found');
