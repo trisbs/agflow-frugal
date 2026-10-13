@@ -857,3 +857,18 @@ Implemented prompt-triggered godev status: compact hook context and skill guidan
 - Updated the prompt hook and English/Traditional Chinese guidance; ordinary writes and hooks still cannot transfer ownership.
 - Verification: focused ownership/hook suites passed 50/50 with 3 platform skips; startup/CLI and guidance contracts passed 221/221; expanded stale-snapshot cases passed 2/2; `node --check`, `git diff --check`, and the 32 KiB skill limit passed.
 - The restricted sandbox hangs nested-process fixtures and cannot write their `/home/tristan/tmp` scratch path; the test suites passed in the authorized unrestricted run. No external reviewer, paid provider call, push, release, or install update.
+
+## [RUN-041] Event — 2026-10-13 13:13:47 +0800 (A-003)
+
+- Committed the scoped handoff implementation as `d5e50ec` (`Implement safe native session handoff`); no push.
+- The cross-check planner selected full review because the change touches persistent single-writer state. Review will use the permitted host fallback: no paid external call is authorized by this Ask, and this session exposes no separate native reviewer tool. Independence limits will be explicit.
+
+## [RUN-042] Event — 2026-10-13 13:14:26 +0800 (A-003)
+
+- Review found the startup-lock race branch returned `startup_lock_present` without explaining that the owner message was unsaved or how to retry. This would leave a losing concurrent `godev` claimant without the design's required recovery instruction.
+- Adding a bounded retry instruction to the startup result and a regression assertion; the prior implementation commit is not yet the final review target.
+
+## [RUN-043] Event — 2026-10-13 13:15:29 +0800 (A-003)
+
+- Added a structured retry instruction to `startup_lock_present`; it states that the exact owner message was not saved and tells the caller to retry after the active startup ends with fresh owner/notebook state.
+- The complete `agf.test.js` CLI suite passed 176/176 after the change; `git diff --check` passed. The startup-lock race now has an explicit regression assertion.

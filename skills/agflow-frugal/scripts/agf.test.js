@@ -1523,6 +1523,7 @@ test('start in a stream writes only its notebook and keeps interrupted intake on
 		assert.equal(locked.status, 0, locked.stderr)
 		assert.equal(JSON.parse(locked.stdout).notebook, notebook)
 		assert.equal(JSON.parse(locked.stdout).message.reason, 'startup_lock_present')
+		assert.match(JSON.parse(locked.stdout).message.retry_instruction, /message was not saved.*Retry this exact startup.*fresh owner and notebook state/u)
 		assert.deepEqual(fs.readFileSync(path.join(worktree, notebook)), stream_before)
 		assert.deepEqual(fs.readFileSync(path.join(worktree, 'devlog.md')), root_before)
 	} finally {

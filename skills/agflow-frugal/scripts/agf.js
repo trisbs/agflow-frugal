@@ -790,7 +790,12 @@ const start_result = ({ repo, host, host_family, notebook, notebook_text, intake
 		tracked_project_records: setup_result.changed_files.filter(file => [notebook, 'ag.json', '.gitignore'].includes(file)),
 		ignored_local_host_settings: setup_result.changed_files.filter(file => ['.codex/hooks.json', '.claude/settings.json'].includes(file)),
 	},
-	message: { inserted: message_result.inserted, reason: message_result.reason, ...(message_result.owner_handoff ? { owner_handoff: message_result.owner_handoff } : {}) },
+	message: {
+		inserted: message_result.inserted,
+		reason: message_result.reason,
+		...(message_result.retry_instruction ? { retry_instruction: message_result.retry_instruction } : {}),
+		...(message_result.owner_handoff ? { owner_handoff: message_result.owner_handoff } : {}),
+	},
 	current_ask_identifier: intake.current_ask?.id || null,
 	current_ask: intake.current_ask,
 	changed_paths: intake.changed_paths,
@@ -841,7 +846,8 @@ const emit_start_result = (result, args, repo, log) => {
 	log(`ready: ${repo}`)
 	log(`notebook: ${result.notebook}`)
 	log(`setup: ${result.setup.created ? 'initialized' : 'already complete'}`)
-	log(`owner message: ${result.message.inserted ? 'recorded' : 'already present'}`)
+	if (result.message.retry_instruction) log(`owner message: not saved; ${result.message.retry_instruction}`)
+	else log(`owner message: ${result.message.inserted ? 'recorded' : 'already present'}`)
 	if (result.message.owner_handoff) log(`owner: continued from ${result.message.owner_handoff.from.host} session ${result.message.owner_handoff.from.session}`)
 	if (result.hooks.status === 'not_available') {
 		log('hooks: not_available')
@@ -896,7 +902,12 @@ const start_main = (argv, cwd, log, _ask, _width = 80) => {
 				notebook_text: fs.readFileSync(path.join(repo, intake.notebook), 'utf8'),
 				intake,
 				setup_result: { created: false, created_files: [], changed_files: [] },
-			message_result: { inserted: false, reason: 'startup_lock_present', owner_message: message },
+			message_result: {
+				inserted: false,
+				reason: 'startup_lock_present',
+				owner_message: message,
+				retry_instruction: 'The owner message was not saved because another startup is still running. Retry this exact startup after it finishes to use fresh owner and notebook state.',
+			},
 			provenance: [],
 			git_identity,
 			host_family: args.host_family,
