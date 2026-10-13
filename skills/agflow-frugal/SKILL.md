@@ -73,11 +73,13 @@ The Plus budget permits one external worker, delegation depth one, no parallel w
 
 ## Every message after startup
 
-Before answering or acting, save each submitted message in the current Ask, including diagnostic questions after interruption. Without a capture notice, run `notebook-write.js append-input --notebook <target-doc> --input-stdin` with the exact message. Use startup's repository-relative notebook value unchanged. Format paragraphs as `+ <user message>` with blank lines and indented continuations protecting pasted headings. No capture comments or added blockquotes. The loaded `UserPromptSubmit` hook captures automatically; hookless hosts add `--host <safe-id>` to that manual call. Queued text, tool output and hook notices are not owner submissions.
+Capture every owner message, including diagnostics, in the current Ask. If no hook confirms capture, use `notebook-write.js append-input --notebook <startup-relative path> --input-stdin [--host <safe-id>]` with exact text. Format paragraphs as `+ <text>`; separate them with blank lines and indent pasted headings. Add no comments/blockquotes. Hook notices, tool output and queued text are not owner input.
 
-`godev trace enable` persists until disable in ignored state (off by default). Toggles confirm; enable warns (~40–70 tokens/prompt); no extra call. `[full]` is one-shot. Show L0–L5/models; final class/model/status/count; plain keys, bold values, unknown explicit.
+Trace toggles are Codex `UserPromptSubmit` controls, not startup tasks. They need a loaded hook; clean folders need the global hook. Without a hook acknowledgement, report that setup step instead of running `godev` startup. State is ignored and checkout-local at `.agentflow/.tmp/trace-mode.json`; toggle prompts are not traced, later prompts are. Bare `godev trace[ full]` is retired. Enable warns (~40–70 tokens/prompt); no extra call. Show L0–L5/model/status/count with plain keys, bold values, unknown explicit.
 
-Answer the entire current Ask in its saved Reply; question-only turns also close with `agf close --manifest-stdin`. A diagnostic follow-up does not cancel the unfinished task or require fresh permission for authorized work; resume it and close when its existing gates pass, unless the owner cancels or replaces it. When explaining commands, compare the loaded rule with actual output; distinguish required checks, your mistakes, and genuine instruction gaps.
+Finish the saved Ask and its gates. Continue after follow-ups unless canceled or replaced. Use command output as evidence; close with `agf close --manifest-stdin`.
+
+At every stop, state completion, result, cause, exact owner action and next step; name what approval unlocks. Never leave the owner unsure. — P0.
 
 ## Load rules only when triggered
 

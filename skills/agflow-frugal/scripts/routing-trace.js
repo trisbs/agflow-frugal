@@ -2,6 +2,13 @@
 
 const looks_secret = value => /(?:api[-_]?key|access[-_]?token|refresh[-_]?token|client[-_]?secret|password|credential|bearer|authorization|private[-_]?key)/iu.test(value)
 
+const active_model = value => typeof value === 'string'
+	&& value.length <= 128
+	&& /^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(value)
+	&& !looks_secret(value)
+	? value
+	: 'unavailable'
+
 const safe_atom = (value, fallback = 'unknown') => typeof value === 'string' && value.length > 0 && !looks_secret(value)
 	? value.replace(/[^A-Za-z0-9._:/-]/gu, '_').slice(0, 48) || fallback
 	: fallback
@@ -60,4 +67,4 @@ const format = (result, mode = 'summary') => {
 	return lines.slice(0, 14)
 }
 
-module.exports = { safe_atom, observed_atom, format }
+module.exports = { safe_atom, active_model, observed_atom, format }

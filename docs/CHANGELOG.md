@@ -18,6 +18,14 @@ Notable Agentflow Frugal changes, with the newest version first. Release metadat
 
 - Installation instructions now point to `trisbs/agflow-frugal` and identify this project as a fork of upstream Agentflow v8.3.3.
 
+### Fixed
+
+- Persistent Codex trace controls now work in clean non-Git folders when the `UserPromptSubmit` hook is loaded, even without an Agentflow devlog. Trace state remains local to the folder. Hook registration still follows its configured scope; this release does not install a global hook automatically.
+
+- Trace reports use only the exact model slug supplied by the current host hook and report `unavailable` when that value is absent or invalid.
+
+- Stop reports identify whether work completed, what happened, the actual blocker or error, and the concrete owner action and next step. Historical push descriptions no longer count as current successful pushes during closeout.
+
 ## [8.3.3]
 
 ### Fixed

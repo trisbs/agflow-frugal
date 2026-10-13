@@ -22,6 +22,40 @@ The escalation rule is:
 For work the owner clearly requests within this project, do not pause for per-diff or per-commit approval solely because a general skill asks for review. Show diffs and commit scoped authorized work without asking again. This does not authorize push, release/publication, paid provider calls, or installed-copy updates unless the owner explicitly requests that action. The always-loaded `skills/agflow-frugal/SKILL.md` is the operational source; retain this note as the durable project record.
 - This is a persistent owner preference, not a temporary release checklist item. Preserve it when reorganizing or pruning `Task.md`; do not delete or weaken it.
 
+## P0 — Make every workflow stop actionable and unambiguous
+
+**Status: implemented and contract-verified 2026-10-13.** The always-loaded skill and closeout guidance now require a clear completion status, result, cause/gate, exact owner action and next step. A focused prompt-compression contract test covers the stop-report rule and distinguishes errors, approval, missing input, unavailable capability, and pending checks.
+
+**Owner request:** At every stop, explain clearly what happened and what the owner should approve or do next. State whether the task is complete; identify any error or blocker; and never leave the owner unsure of the current situation or next action.
+
+**Required stop report:** Before yielding control, state in plain language:
+
+- **Task status:** complete or incomplete, with the acceptance condition that remains if incomplete.
+- **What happened:** the completed work and relevant result/evidence, or the exact point where work stopped.
+- **Error or blocker:** the actual error and its effect, or say explicitly that there was no error and the stop is an approval, missing input, unavailable capability, or other named gate.
+- **Owner action:** the exact approval phrase or concrete action needed, what it authorizes/unblocks, and whether work must wait for it.
+- **Next step:** who or what proceeds after that action; if the task is complete, say that no further action is needed unless one is genuinely required.
+
+Do not call a task complete while required work or acceptance checks remain. Do not report a generic “blocked” or “stopped” state without naming the cause and actionable next step. If no owner action is needed and work can continue safely, continue instead of presenting an unnecessary stop.
+
+**Acceptance:** stop messages for completed, failed, approval-gated, input-gated, and capability-limited work each identify the task status, cause/result, and concrete next action; approvals are distinguished from ordinary pending checks and errors; unfinished work is never described as complete. A focused contract test checks that the operational guidance retains these requirements.
+
+## P1 — Make hook availability follow Agentflow installation scope
+
+**Status: closed by owner direction 2026-10-13; implementation deferred.** The owner said the godev trace task can be closed. This is an owner-directed closure, not a claim that the acceptance criteria passed: Agentflow remains installed as a global skill at `/home/tristan/.agents/skills/agflow-frugal`, while Codex hooks are registered only in this repository's `.codex/hooks.json`; `/home/tristan/.codex/hooks.json` is absent. The installer defaults to project scope, so global skill availability alone does not provide hook-dependent commands such as `godev trace enable` in a clean folder. Reopen this task if the owner wants the scope-alignment implementation resumed.
+
+**Owner request:** correct the installation design so Agentflow commands work in clean folders when Agentflow is installed globally, and detect/resolve missing required hook settings when first run from a project installation. The owner called the current separation between skill-install scope and hook-install scope a design error and requested careful review of this task.
+
+**Reviewed design boundary:** Agentflow command/skill discovery and host-hook registration are distinct mechanisms, but the installer must keep their scopes consistent. `--global` must install and verify user-level hooks for supported hosts, so hook-dependent commands work from arbitrary working directories. `--project` must install and verify only that project's hooks; it must not silently write user-level host settings. If a project-scoped install is used for a feature requiring a global hook from outside that project, the first available Agentflow entry point must identify the missing hook, explain its machine-wide scope and effect, and give a direct authorized setup path. A clean folder without a loaded project hook cannot itself detect or repair a missing global `UserPromptSubmit` hook, so the design must not depend on that hook to report its own absence.
+
+**Acceptance:**
+
+- Global install registers the supported host hooks at the host's user-level configuration path, validates the resulting entries, preserves unrelated settings and existing hooks, and reports whether a host restart is needed.
+- Project install registers project-level hooks only. It never silently escalates to user scope; any offer to add a missing global hook states the target config and cross-session effect before the owner authorizes it.
+- Agentflow command availability follows the install scope: a global installation works from an unrelated clean directory; a project installation works within its documented project boundary and gives a clear actionable message outside that boundary when a required hook is unavailable.
+- After global setup and host reload, `godev trace enable`, an ordinary prompt, and `godev trace disable` work in a clean non-Git folder; trace state is local to that folder. No `.git`, existing devlog, or project hook file is required for this trace flow.
+- Tests use disposable host config and working directories to cover global/project install, missing or malformed registrations, clean folders, nested/unrelated directories, idempotence, preserving unrelated settings, and write failures. No test writes the real user-level host configuration.
+
 ## P0 — Do not re-ask for authorized project diffs or commits — workflow regression
 
 **Status: implemented and recurrence-validated 2026-10-08.** On 2026-10-08, the assistant again requested diff approval after the owner had already established a persistent no-per-diff/no-per-commit rule for this project.
@@ -46,11 +80,11 @@ For work the owner clearly requests within this project, do not pause for per-di
 
 Verified: the complete Agentflow script suite passed 1,442 tests with 29 environment-specific skips outside the restricted process sandbox; the focused empty-ancestor `.git` `EPERM` regression also passed. The always-loaded skill now fits the 32 KiB budget (32,371 bytes), and its prompt-compression test passes. No installed copy was changed and no release or publish occurred.
 
-## P1 — Simplify unfinished-work handoff for remote sessions — implemented; closeout gate unresolved
+## P1 — Simplify unfinished-work handoff for remote sessions — complete 2026-10-13
 
 **Reason:** the current session-owner flow adds host/session identity, owner inspection, token/hash preconditions, and explicit adoption steps that make it cumbersome for a new or remote session to continue ordinary unfinished work. The upstream Agentflow model is simpler: recover from the shared notebook's STATUS and last round, while keeping one writer per notebook.
 
-**Status: implementation and review complete; local closeout is blocked by a completion-check false positive.** Design Go was received for `ad4fa53`; implementation is committed as `c4a86e9d0e8430a1ca61daa4b86845544bec20f3`, and the owner supplied the matching `Result Go` on 2026-10-13. Codex or Claude `godev` startup transfers an actively owned open Ask only when the owner-token and notebook-hash snapshot taken before startup locks still matches under lock. Startup records the transfer and fences the former session; hooks only explain the startup path and never transfer ownership. Review and verification evidence are in `.agentflow/artifacts/A-003-remote-handoff/A-003-review-report.md`. The close checker also flags a historic A-003 sentence describing upstream `agf new` as having pushed; this is not a claim that this round pushed, and the append-only history cannot be edited. No push, release, or installed-copy update occurred.
+**Status: implementation, review, historical-claim correction, and local closeout complete.** Design Go was received for `ad4fa53`; implementation is committed as `c4a86e9d0e8430a1ca61daa4b86845544bec20f3`, and the owner supplied the matching `Result Go` on 2026-10-13. Codex or Claude `godev` startup transfers an actively owned open Ask only when the owner-token and notebook-hash snapshot taken before startup locks still matches under lock. Startup records the transfer and fences the former session; hooks only explain the startup path and never transfer ownership. Review and verification evidence are in `.agentflow/artifacts/A-003-remote-handoff/A-003-review-report.md`. A later push-claim correction was committed as `d61c699438dbfb1cd787faba1803f5c3ef27aca1`; RUN-049 records that the local close journey passed with the historical comparison intact. No push, release, or publication occurred.
 
 **Acceptance:** a fresh/remote session can resume an unfinished Ask by reading the canonical notebook and following its current STATUS/last round, without owner authentication or manual token/hash copying; the previous writer is clearly prevented from concurrently changing the same Ask; ordinary same-session continuation remains unchanged; competing simultaneous writers are deterministically handled; tests cover fresh-session resume, genuine concurrent-write conflict, and recovery after interruption. Do not update the installed copy automatically.
 
@@ -62,7 +96,7 @@ Verified: the complete Agentflow script suite passed 1,442 tests with 29 environ
 
 **Upstream comparison:** the imported original Agentflow snapshot is commit `4b4a31a` (upstream `agfnow/agentflow` commit `8527813`). Its simpler recovery reads STATUS and the last Ask/Reply, without this fork's persistent host/session ownership and token/hash transfer machinery. It also does not impose the current consequential `Design Go` / `Result Go` sequence in the inspected skill/pipeline text. Frugal adds stronger single-writer fencing and structured independent-review/closeout evidence; those safeguards explain the added stops but create more handoff and completion friction. Upstream documentation alone does not prove it would avoid every nested-process or ownership failure.
 
-**Task outcome:** comparison recorded; the owner supplied both gates, and the approved handoff change is implemented and reviewed. The local closeout false positive remains unresolved; the current-model attribution issue also remains open.
+**Task outcome:** comparison recorded; the owner supplied both gates, and the approved handoff change is implemented and reviewed. The local closeout false positive was later resolved by the historical-push-claim correction (`d61c699438dbfb1cd787faba1803f5c3ef27aca1`); RUN-049 records that the local close journey passed without a push. The current-model attribution issue was also later completed: the live Codex prompt supplied `gpt-6-luna`, as recorded in the completed P1 trace task below. No push or release occurred.
 
 ## P1 — Keep historical push descriptions from blocking unrelated closeout — completed 2026-10-13
 
@@ -94,13 +128,21 @@ No push, release, or publication occurred.
 
 **Persistent trace follow-up — Design Go `7d3f65a` (2026-10-08): implemented and committed as `e49b226`.** `godev trace enable` / `godev trace disable` control a checkout-local Codex prompt-hook setting stored only in ignored `.agentflow/.tmp/trace-mode.json`. It defaults off; enabling reports the approximate 40–70-token cost; toggle prompts only confirm; no extra model call. `godev trace` and `godev trace full` remain one-shot controls. Tracked `ag.json` and installed files were not changed. **Evidence:** RUN-035 records hook recovery + prompt-compression 39/39, alignment 14/14, syntax, diff, and ignored-path checks; the full script suite then passed 1,458 tests with 29 environment-specific skips. Live UI rendering is not verified: this Linux host lacks `/usr/bin/expect`. No release, installed-copy update, or publication.
 
-## P1 — Never guess the active model in trace reports — open
+**Superseding owner decision:** the archived A-003 Ask later says `godev trace enable` should replace bare `godev trace` and that one-shot tracing is not needed. The earlier one-shot hook behavior was therefore not the intended final prompt interface. Current prompt-hook instructions retire bare `godev trace` and `godev trace full`, direct users to persistent enable/disable, and keep the separate route CLI `--trace` switches unchanged.
+
+## P1 — Never guess the active model in trace reports — complete 2026-10-13
 
 **Incident:** a recent trace response labeled the current model `GPT-5` based on a broad runtime description, without an exact active-model value from the Codex hook. That label was unsupported and the owner identified it as wrong.
 
 **Requirement:** trace must use the exact active model supplied by the current host prompt hook. Never infer it from the assistant's model family, worker configuration, prior turns, or another session. If the host does not provide an exact value, report that the active-model source was unavailable and do not invent a substitute; investigate a reliable host source rather than treating a guess as a fix.
 
-**Acceptance:** tests prove the displayed value comes from the current hook input, and that missing, malformed, or secret-shaped values cannot be replaced by a guessed model name. The trace prompt and final line must distinguish a verified active model from a missing host value. Keep this issue open until accurate attribution is demonstrated in the live Codex path.
+**Acceptance:** tests prove the displayed value comes from the current hook input, and that missing, malformed, or secret-shaped values cannot be replaced by a guessed model name. The trace prompt and final line must distinguish a verified active model from a missing host value. **Met:** the current ordinary Codex prompt, sent after persistent tracing was enabled, supplied `gpt-6-luna`; the response reports that exact value.
+
+**Progress (2026-10-13):** Codex's documented `UserPromptSubmit` payload includes `model` as the active model slug. The source hook already forwarded that field, but its generic sanitizer could rewrite malformed text into a plausible label and used ambiguous `unknown` for absence. It now accepts only an exact safe model slug, preserves it unchanged, and otherwise supplies `unavailable` with instructions not to guess. Focused routing-trace and prompt-hook tests pass 30/30, covering exact values, absent and malformed values, secret-shaped values, and the prompt context. Live Codex output still needs a real persistent trace: enable it, observe a subsequent ordinary prompt, then disable it. This proves the current hook supplied and displayed its model; scripted fixtures alone do not. Keep the task open until that live check is observed.
+
+**Correction (2026-10-13):** inspection of the archived A-003 Ask confirms that persistent tracing was intended to replace one-shot prompt tracing. The source hook had nevertheless retained bare `godev trace`/`godev trace full` one-shot behavior. They now display a retirement notice and do not trace their own prompt, even while persistent mode is enabled. Persistent tracing remains active on later ordinary prompts and uses only the model slug supplied by that prompt's hook input. The live validation procedure is therefore `godev trace enable`, inspect the next ordinary prompt's trace, then `godev trace disable`.
+
+**Live proof (2026-10-13):** after `godev trace enable`, an ordinary `godev continue` prompt supplied the exact hook model `gpt-6-luna`. The owner clarified that the earlier reply's completed trace line was not visible to them; this reply now emits it explicitly. The hook itself displays only a pre-turn `PENDING` template. Duplicate project-local and installed registrations were found in `.codex/hooks.json`; the project-local entries were removed, leaving the installed hook as the single configured handler for each event. A fresh session is needed to confirm the host has loaded the updated registration.
 
 ### Upstream comparison: original Agentflow
 

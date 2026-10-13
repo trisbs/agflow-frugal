@@ -4,6 +4,14 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const trace = require('./routing-trace.js')
 
+test('active Codex model accepts only an exact safe slug', () => {
+	assert.equal(trace.active_model('gpt-6.1-sol'), 'gpt-6.1-sol')
+	assert.equal(trace.active_model('Model_2.preview'), 'Model_2.preview')
+	for (const value of [undefined, null, '', '   ', 'GPT 5', 'model/name', 'model\nname', 42, { model: 'gpt-6.1-sol' }, 'a'.repeat(129), 'access_token-secret']) {
+		assert.equal(trace.active_model(value), 'unavailable')
+	}
+})
+
 test('summary trace reports observed stage, tier, profile, and model without raw output', () => {
 	const lines = trace.format({
 		status: 'complete',

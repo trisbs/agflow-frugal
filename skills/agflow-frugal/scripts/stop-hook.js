@@ -15,7 +15,7 @@ const { collect } = require('./completion-context');
 
 const external_delegate_marker_pattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 
-const trace_prompt = prompt => /^\s*\/?godev\s+trace(?:\s+full)?\s*$/iu.test(String(prompt || ''));
+const retired_trace_prompt = prompt => /^\s*\/?godev\s+trace(?:\s+full)?\s*$/iu.test(String(prompt || ''));
 const trace_mode_command = prompt => {
   const match = /^\s*\/?godev\s+trace\s+(enable|disable)\s*$/iu.exec(String(prompt || ''));
   return match ? match[1].toLowerCase() === 'enable' : null;
@@ -84,9 +84,14 @@ const trace_mode_notice = (enabled, failed = false) => {
   };
 };
 
+const retired_trace_notice = () => ({
+  systemMessage: 'AGF TRACE — ONE-SHOT RETIRED\nUse `godev trace enable` to trace later prompts until `godev trace disable`.',
+  traceContext: 'The owner used the retired one-shot trace command. Do not claim this prompt was traced; explain the persistent enable/disable commands.',
+});
+
 const trace_notice = (input, persistent = false) => {
-  if (input.hook_event_name !== 'UserPromptSubmit' || (!persistent && !trace_prompt(input.prompt))) return {};
-  const model = require('./routing-trace.js').safe_atom(input.model);
+  if (input.hook_event_name !== 'UserPromptSubmit' || !persistent) return {};
+  const model = require('./routing-trace.js').active_model(input.model);
   return {
     systemMessage: [
       'AGF TRACE — CURRENT RUN',
@@ -95,8 +100,23 @@ const trace_notice = (input, persistent = false) => {
       'WORKER MODEL/STATUS: **NOT STARTED**',
       'WORKERS STARTED: **0**',
     ].join('\n'),
-    traceContext: `For this godev trace, classify the task as L0, L1, L2, L3, L4, or L5 after assessment. Then emit one scannable line with plain keys and bold values: TASK CLASS: **Lx** | CURRENT MODEL: **...** | WORKER MODEL/STATUS: **...** | WORKERS STARTED: **N**. Hook model value: ${model}. Say pending/unknown/not started as warranted; distinguish configured from observed. Count only workers actually launched; the submit-time count is 0. Do not use emoji key markers or repeat token-cost information in the result.`,
+    traceContext: `For this godev trace, classify the task as L0, L1, L2, L3, L4, or L5 after assessment. Then emit one scannable line with plain keys and bold values: TASK CLASS: **Lx** | CURRENT MODEL: **...** | WORKER MODEL/STATUS: **...** | WORKERS STARTED: **N**. Hook model value: ${model}. Use this value exactly for CURRENT MODEL. If it is unavailable, say the active-model source was unavailable; do not substitute or infer a model name. Say pending/not started as warranted; distinguish configured from observed. Count only workers actually launched; the submit-time count is 0. Do not use emoji key markers or repeat token-cost information in the result.`,
   };
+};
+
+const prompt_trace_notice = (input, active_host, project_dir) => {
+  if (input.hook_event_name !== 'UserPromptSubmit') return {};
+  const trace_command = active_host === 'codex' ? trace_mode_command(input.prompt) : null;
+  if (trace_command !== null) {
+    try {
+      write_trace_mode(project_dir, trace_command);
+      return trace_mode_notice(trace_command);
+    } catch (error) {
+      return trace_mode_notice(trace_command, true);
+    }
+  }
+  if (active_host === 'codex' && retired_trace_prompt(input.prompt)) return retired_trace_notice();
+  return trace_notice(input, active_host === 'codex' && read_trace_mode(project_dir));
 };
 
 const read_stdin = () => {
@@ -169,22 +189,22 @@ const main = () => {
   }
   const devlog_path = node_path.join(project_dir, notebook_path);
 
-  // Not a devlog session — nothing to referee.
-  if (!node_fs.existsSync(devlog_path)) return 0;
+  const trace = prompt_trace_notice(input, active_host, project_dir);
+
+  // Trace controls are checkout-local host controls and remain available in a
+  // clean folder without an Agentflow notebook. Other hook behavior still
+  // requires a configured devlog.
+  if (!node_fs.existsSync(devlog_path)) {
+    if (input.hook_event_name === 'UserPromptSubmit' && (trace.systemMessage || trace.traceContext)) {
+      process.stdout.write(JSON.stringify({ ...(trace.systemMessage ? { systemMessage: trace.systemMessage } : {}), hookSpecificOutput: {
+        hookEventName: 'UserPromptSubmit',
+        additionalContext: trace.traceContext || '',
+      } }) + '\n');
+    }
+    return 0;
+  }
 
   if (input.hook_event_name === 'UserPromptSubmit') {
-    const trace_command = active_host === 'codex' ? trace_mode_command(input.prompt) : null;
-    let trace;
-    if (trace_command !== null) {
-      try {
-        write_trace_mode(project_dir, trace_command);
-        trace = trace_mode_notice(trace_command);
-      } catch (error) {
-        trace = trace_mode_notice(trace_command, true);
-      }
-    } else {
-      trace = trace_notice(input, active_host === 'codex' && read_trace_mode(project_dir));
-    }
     const status = status_context(input);
     const current = parse_devlog(node_fs.readFileSync(devlog_path, 'utf8')).rounds.at(-1);
     if (!current || current.reply_text.trim()) {

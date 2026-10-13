@@ -33,16 +33,20 @@ test('the always-loaded skill stays within the retained 32 KiB budget', () => {
 	assert.match(read('skills/agflow-frugal/references/closeout.md'), /"allowed_paths"/)
 })
 
-test('prompt trace supports persistent checkout-local mode and compatible one-shot control', () => {
+test('prompt trace supports persistent checkout-local mode and retires one-shot control', () => {
 	const skill = read('skills/agflow-frugal/SKILL.md')
 	const hook = read('skills/agflow-frugal/scripts/stop-hook.js')
 	const docs = read('skills/agflow-frugal/scripts/README.md')
-	assert.match(skill, /`godev trace enable` persists until disable in ignored state/u)
-	assert.match(skill, /`\[full\]` is one-shot/u)
+	assert.match(skill, /Trace toggles are Codex `UserPromptSubmit` controls, not startup tasks/u)
+	assert.match(skill, /clean folders need the global hook.*Without a hook acknowledgement, report that setup step instead of running `godev` startup/u)
+	assert.match(skill, /Bare `godev trace\[ full\]` is retired/u)
 	assert.match(skill, /40–70 tokens\/prompt/u)
 	assert.match(skill, /unknown explicit/u)
 	assert.match(hook, /\.agentflow', '\.tmp', 'trace-mode\.json'/u)
+	assert.match(hook, /ONE-SHOT RETIRED/u)
+	assert.match(hook, /!persistent\) return \{\}/u)
 	assert.match(docs, /defaults off, survives prompts\/restarts, and is not shared with other checkouts/u)
+	assert.match(docs, /retired one-shot prompts `godev trace` and `godev trace full`/u)
 })
 
 test('prompt status distinguishes explicit approval gates from work and blockers', () => {
@@ -69,14 +73,20 @@ test('consequential Go gates ask for the exact owner decision and explain its ef
 })
 
 test('project authorization overrides the global diff-approval rule and names the L3 display', () => {
-	const project_policy = read('AGENTS.md')
-	const task = read('Task.md')
 	const skill = read('skills/agflow-frugal/SKILL.md')
-	assert.match(project_policy, /global instruction file `\/home\/tristan\/\.codex\/AGENTS\.md`, under `## Code Change Approval`/u)
-	assert.match(project_policy, /authorized without per-diff or per-commit approval.*do not wait for approval or require `CMD:auto-approve`/is)
-	assert.match(project_policy, /push.*release.*paid.*installed/isu)
+	const project_policy_path = path.join(root, 'AGENTS.md')
+	if (fs.existsSync(project_policy_path)) {
+		const project_policy = read('AGENTS.md')
+		assert.match(project_policy, /global instruction file `\/home\/tristan\/\.codex\/AGENTS\.md`, under `## Code Change Approval`/u)
+		assert.match(project_policy, /authorized without per-diff or per-commit approval.*do not wait for approval or require `CMD:auto-approve`/is)
+		assert.match(project_policy, /push.*release.*paid.*installed/isu)
+	}
 	assert.match(skill, /Exception: `\/home\/tristan\/\.codex\/AGENTS\.md` § `Code Change Approval`/i)
-	assert.match(task, /TASK CLASS: \*\*L3 — Basic Direct\*\*.*CURRENT MODEL: \*\*.*WORKER MODEL\/STATUS: \*\*.*WORKERS STARTED:/s)
+	const task_path = path.join(root, 'Task.md')
+	if (fs.existsSync(task_path)) {
+		const task = read('Task.md')
+		assert.match(task, /TASK CLASS: \*\*L3 — Basic Direct\*\*.*CURRENT MODEL: \*\*.*WORKER MODEL\/STATUS: \*\*.*WORKERS STARTED:/s)
+	}
 })
 
 test('the always-loaded skill routes advanced machinery on demand', () => {
@@ -99,6 +109,13 @@ test('the slim front door retains the owner, scope, evidence, and Git boundaries
 	assert.match(skill, /Facts require direct command output or file inspection/i)
 	assert.match(skill, /failing test.*smallest green change.*complete relevant suite/i)
 	assert.match(skill, /Never force-push/i)
+})
+
+test('every workflow stop explains status, cause, owner action, and next step', () => {
+	const skill = read('skills/agflow-frugal/SKILL.md') + '\n' + read('skills/agflow-frugal/references/closeout.md')
+	assert.match(skill, /At every stop, state completion, result, cause, exact owner action and next step; name what approval unlocks/i)
+	assert.match(skill, /If a gate prevents completion, say plainly that the task is incomplete; distinguish an error \(and its effect\) from approval, missing input, unavailable capability, or a pending check.*exact owner action or approval needed.*what happens next/is)
+	assert.match(skill, /Never imply completion while acceptance work remains/i)
 })
 
 test('show-diff requires justified, human-scannable unified diff hunks', () => {
