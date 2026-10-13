@@ -4,19 +4,19 @@ Project: agflow-frugal
 
 Notebook: .agentflow/devlog.md — root.
 
-Current commit: 0693c37 — current local HEAD; no commit created this round.
+Current commit: d61c699 — linter correction; this closeout records today's completed tasks in Git history.
 
-Tests/scenarios: latest recorded full script suite passed 1,458 tests with 29 environment-specific skips; persistent-trace follow-up checks passed as recorded in RUN-035. No tests were run this round.
+Tests/scenarios: push_claim_valid focused suite: 16 passed, 0 failed; installed historical-RUN regression passed; git diff --check passed.
 
-Configuration: ag.json — validated at startup for codex; project hooks are present. Startup reports hooks_restart_required: true.
+Configuration: ag.json — schema v8; validated for codex this round.
 
-Proven: R8 acceptance complete; persistent trace committed as e49b226; nested-Git EPERM fix passes its reproduced-case checks; Codex ownership continuity implemented.
+Proven: workflow/upstream comparison complete; historical push-claim correction committed and host-reviewed; installed linter updated by explicit request; no push or release.
 
-Open: A-003 closeout is blocked by the completion check requiring an external cross-check report and a matching push-result claim; no commit or push occurred. Release remains unauthorized; remote-session handoff design awaits `Design Go: ad4fa53`; active-model attribution in trace remains open.
+Open: accurate active-model attribution in trace remains open.
 
-Next: resolve the A-003 completion-check evidence mismatch before retrying closeout; restart Codex to load hooks. Keep release and installed-copy updates separate until explicitly requested.
+Next: continue remaining open items recorded in Task.md.
 
-Artifacts: .agentflow/artifacts/A-003-remote-handoff/design.md; persistent trace state is checkout-local under ignored .agentflow/.tmp/trace-mode.json.
+Artifacts: .agentflow/artifacts/A-003-remote-handoff/A-003-review-report.md; .agentflow/artifacts/A-003-push-claim-history/design.md; .agentflow/artifacts/A-003-push-claim-history/review-report.md; Task.md.
 
 Archived eras: none.
 
@@ -632,6 +632,12 @@ Task.md now records the 128-test result and completed R8.3 evidence. R8 remains 
 
 + Design Go: ad4fa53
 
++ Result Go: c4a86e9d0e8430a1ca61daa4b86845544bec20f3
+
++ godev finish tasks we added today
+
++ Design Go: 9e6a4ea and update installed agentflow
+
 ---
 
 ## [RUN-001] Event — 2026-10-08 10:49:51 +0800 (A-003)
@@ -872,3 +878,79 @@ Implemented prompt-triggered godev status: compact hook context and skill guidan
 
 - Added a structured retry instruction to `startup_lock_present`; it states that the exact owner message was not saved and tells the caller to retry after the active startup ends with fresh owner/notebook state.
 - The complete `agf.test.js` CLI suite passed 176/176 after the change; `git diff --check` passed. The startup-lock race now has an explicit regression assertion.
+
+## [RUN-044] Event — 2026-10-13 13:33:07 +0800 (A-003)
+
+- The owner supplied the exact `Result Go`; closeout reached completion checks but did not write the Reply or commit. The sandbox first refused the `.git` lock with EROFS; the authorized retry reached linter checks.
+- Corrected the review report’s stamp and exact commit/verdict formatting after the linter rejected its formatting. A historic A-003 comparison sentence about upstream `agf new` says it “pushed”; the push checker reads the whole append-only Ask and treats that historical description as a current push claim, while the local branch is 23 commits ahead of `origin/main`.
+- No push was made. Task.md now records implementation/review complete and the closeout false positive unresolved. The untracked setup marker remains preserved.
+
+## [RUN-045] Event — 2026-10-13 13:40:17 +0800 (A-003)
+
+- The workflow/upstream comparison task is complete. The historical-claim closeout fix is classified L4 because it changes a safety-related validation gate.
+- Saved and committed its minimal design as `9e6a4ea1d9beacb22152a8fe4ba64d6950876749`; source and test edits have not started. The exact `Design Go: 9e6a4ea` gate is pending.
+- Preserved the A-003 closeout edits, review artifacts, and untracked setup marker; no push or installation update occurred.
+
+## [RUN-046] Event — 2026-10-13 13:48:20 +0800 (A-003)
+
+- Implemented and committed the historical push-claim correction as d61c699438dbfb1cd787faba1803f5c3ef27aca1; the focused push-claim suite passed 16/16, including historical RUN text, current Reply and terminal-output claims, matching host success facts, and the existing language sweep.
+
+## [RUN-047] Event — 2026-10-13 13:48:20 +0800 (A-003)
+
+- Reviewed the exact implementation commit under the targeted host-review fallback; the report records Outcome, Minimality, Conformance, and the lack of independent reviewer capability.
+
+## [RUN-048] Event — 2026-10-13 13:48:20 +0800 (A-003)
+
+- On the owner's explicit request, updated only the installed round-linter function, preserved unrelated installed differences, and verified its historical-RUN regression directly. Backup: /tmp/agflow-installed-round-linter.js.before-push-claim-fix.
+
+## [RUN-049] Event — 2026-10-13 13:48:20 +0800 (A-003)
+
+- Confirmed the current local close journey with the historical A-003 comparison intact. No push, release, or publication occurred.
+
+# ← Reply / A-003
+
+* _2026-10-13 13:48:20 +0800 (gpt-6-luna/low)_
+
+## [SUMMARY]
+
+- Completed the two tasks added today: reviewed the current stop point against original Agentflow, and fixed the historical push-claim false positive.
+- Updated the installed Agentflow linter at your request; no push or release occurred.
+
+## [FINAL REPORT]
+
+1. Review the current workflow stop and compare it with original Agentflow
+
+   - Succeeded. The approved handoff design stopped at `Design Go: ad4fa53`; you supplied that approval, and the handoff implementation was reviewed at `c4a86e9d0e8430a1ca61daa4b86845544bec20f3`. You later supplied its `Result Go`.
+   - The imported upstream snapshot resumes from STATUS and the latest Ask/Reply without this fork's persistent owner-token transfer and consequential Design Go/Result Go sequence. Frugal adds stronger single-writer fencing and structured review evidence, with extra handoff and closeout steps.
+   - The workflow comparison and handoff review are recorded in the linked A-003 review report.
+
+2. Finish the tasks added today and correct the historical push-claim stop
+
+   - Succeeded. The approved plan was `Design Go: 9e6a4ea`. Commit `d61c699438dbfb1cd787faba1803f5c3ef27aca1` makes the linter check the active parsed Reply and current terminal output, leaving prior Ask/RUN/WIP descriptions out of current delivery claims.
+   - The focused push-claim tests passed 16/16. They cover historical RUN wording, current Reply and terminal-output assertions, matching successful host facts, and existing denials, questions, promises, hypotheticals, and claim language. The normal local closeout passed with A-003's history intact.
+   - A targeted host review passed Outcome, Minimality, and Conformance. It was not independent: no separate native reviewer was available and no paid external review was authorized. The detailed report records this limitation.
+
+   Key Records — read these first
+
+   - [A-003 handoff review](.agentflow/artifacts/A-003-remote-handoff/A-003-review-report.md) — explains the approved handoff, upstream comparison, implementation evidence, and review limits.
+
+   - [Historical push-claim design](.agentflow/artifacts/A-003-push-claim-history/design.md) — records the approved scope and invariants for the closeout correction.
+
+   - [Push-claim review report](.agentflow/artifacts/A-003-push-claim-history/review-report.md) — records the implementation review, focused test results, and independence limits.
+
+3. Update the installed Agentflow
+
+   - Succeeded. I patched only `lint_push_claim` in `/home/tristan/.agents/skills/agflow-frugal/scripts/round-linter.js` and preserved unrelated installed changes. The installed linter passed the historical-RUN regression directly.
+   - The source and installed file hashes differ because the installed file already contained other local changes; the backup is `/tmp/agflow-installed-round-linter.js.before-push-claim-fix`.
+   - No push, release, or publication was performed.
+
+## Questions (batched — each with a suggested default)
+
+- None.
+
+
+---
+
+# → Ask / A-004 (tristan)
+
++
