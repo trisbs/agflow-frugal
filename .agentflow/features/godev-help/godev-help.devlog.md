@@ -62,4 +62,24 @@ Streams: none.
 
 # → Ask / A-003 (tristan)
 
-+
++ godev continue
+
+---
+
+## [RUN-001] Event — 2026-10-14 13:54:40 +0800 (A-003)
+
+- **Result:** Stream closeout cannot start because `agf finish --prep` requires a clean worktree; it refuses while the eight listed paths have uncommitted changes.
+- **Evidence:** `git status --short` shows the devlog and seven skill/script files modified. I left those changes untouched. No prep, push, merge, or delivery was attempted.
+- **Next:** The owner needs to identify and resolve the existing changes in this worktree. Once the worktree is clean, rerun `agf finish --prep godev-help`, then record and commit the closing Reply before `agf finish --deliver godev-help` from the main checkout.
+
+## [RUN-002] Event — 2026-10-14 13:56:45 +0800 (A-003)
+
+- **Finish attempt:** `agf finish --prep godev-help` stopped before push or merge because the worktree contains unsaved changes.
+- **Scope evidence:** the modified paths are the stream devlog plus hook-install and startup sources/tests. They are outside the completed godev-help change recorded in A-001/A-002; I preserved them and did not commit, stash, or move them.
+- **Next:** the changes must be resolved by their owner in this worktree. Then rerun prep, write and commit the closing Reply, and run delivery from the main checkout.
+
+## [RUN-003] Event — 2026-10-14 14:07:44 +0800 (A-003)
+
+- **Owner authorization:** A-003 ownership was transferred from the prior Codex session to this session after the owner approved the handoff.
+- **Scope preservation:** Saved the seven unrelated hook-scope changes to `/tmp/agf-godev-help-unrelated.5deZvP.patch` (SHA-256 `a8bc1f9dbd0981a1a2035e08a11335e953619100330d059ff46ad16f626b4d37`) and restored their stream worktree copies to the committed versions. No hook-scope change is included in the godev-help stream commit.
+- **Current state:** Those seven paths are clean; only the stream notebook remains modified. Next action is stream preparation.
