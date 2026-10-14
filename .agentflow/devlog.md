@@ -6,17 +6,17 @@ Notebook: .agentflow/devlog.md — root.
 
 Current commit: local delivery recorded in Git history.
 
-Tests/scenarios: 8.4.0 candidate suite: 1467 passed/29 skipped; focused prompt-compression: 1 passed.
+Tests/scenarios: 8.4.0 candidate suite: 1467 passed/29 skipped; focused prompt-compression: 1 passed; Task.md diff check passed.
 
 Configuration: ag.json — schema v8; validated for codex this round.
 
-Proven: Local 8.4.0 candidate 59f38a4 reviewed PASS for Outcome, Minimality and Conformance; full suite passed; public delivery and installed-copy update remain unapproved.
+Proven: Next-stage task 4 records the `godev help` fast-path scope and acceptance; reviewed 8.4.0 candidate remains local and unreleased.
 
-Open: Await owner choice on push/tag/publication and/or installed-copy update.
+Open: Await explicit authorization for public push/tag/publication and/or installed-copy update; next-stage help workflow fix is recorded, not implemented.
 
-Next: After explicit authorization, perform only the selected delivery action; otherwise keep candidate local.
+Next: Keep the candidate local until authorized; implement the help fast path as a next-stage task.
 
-Artifacts: .agentflow/artifacts/A-006-release-candidate/review-report.md; .agentflow/artifacts/A-006-release-candidate/review-brief.md; /tmp/agf-release-8.4.0.
+Artifacts: Task.md; .agentflow/artifacts/A-006-release-candidate/review-report.md; .agentflow/artifacts/A-006-release-candidate/review-brief.md; /tmp/agf-release-8.4.0.
 
 Archived eras: .agentflow/devlog.archive.md.
 
@@ -583,5 +583,53 @@ Resumed Phase 10 release readiness after the owner re-enabled persistent tracing
 ---
 
 # → Ask / A-011 (tristan)
+
++ godev we should fix this workflow when invoking godev commands, like command help is nothing related to Ask, it just needs to print the useage. review the workflow.
+
++ godev add it to next stage task
+
++ have you release the new version yet
+
+---
+
+## [RUN-001] Event — 2026-10-14 10:45:43 +0800 (A-011)
+
+- Recorded the requested next-stage work: review the `godev` entry path and let exact help/control commands return usage without opening or reading a task Ask.
+- Preserve the numbered `Recommended next-stage tasks` format; scope the task to a pre-intake help fast path and acceptance checks for no Ask mutation plus unchanged ordinary task capture.
+
+# ← Reply / A-011
+
+* _2026-10-14 10:46:59 +0800 (gpt-6-luna/low)_
+
+## [SUMMARY]
+
+- Added the `godev help` workflow fix to Task.md’s recommended next-stage list; the current workflow was not changed.
+- No, v8.4.0 has not been released. Its reviewed candidate remains local pending authorization.
+
+## [FINAL REPORT]
+
+1. Review the `godev` command workflow
+
+   - The current entry path captures `godev help` as an Ask and runs the normal startup and answer-recovery process. The skill requires reading the saved Ask when startup reports `already_present`; that is why the prior help request caused notebook handling.
+   - The workflow fix is now recorded as next-stage task 4 in Task.md: add an exact help fast path that prints usage without intake or Ask changes, while keeping task requests such as `godev continue` on the normal path. Its acceptance checks cover unchanged notebook/STATUS/owner state for help and continued Ask capture for normal requests.
+   - No runtime workflow change was made in this round. The saved diff was inspected and `git diff --check` passed.
+
+2. Add the workflow fix to the next-stage task list
+
+   - Succeeded: added Task.md item 4 under `Recommended next-stage tasks`. The entry specifies scope and observable acceptance checks.
+
+3. Check whether the new version has been released
+
+   - No. The reviewed v8.4.0 candidate remains local. Public push/tag/publication and installed-copy update still await explicit authorization; none has occurred.
+
+
+## Questions (batched — each with a suggested default)
+
+- None.
+
+
+---
+
+# → Ask / A-012 (tristan)
 
 +

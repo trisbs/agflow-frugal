@@ -541,6 +541,8 @@ Minimality check: extend the current fixture harness and existing adapters rathe
 
 3. Prompt-enabled run tracing is complete and synchronized to the installed copy; no further trace work is open unless new evidence reopens acceptance. The separate release task remains unchanged.
 
+4. **Return `godev help` before Ask intake.** Review the command entry path and add an exact help fast path so `godev help` (and `/godev help`) prints the supported usage without starting Agentflow intake, capturing an Ask, reading prior Answers, or closing a notebook round. Keep task requests such as `godev continue` on the normal notebook workflow. Acceptance: a focused journey proves the help forms display usage and leave the notebook, STATUS, and owner/session state unchanged; a normal `godev continue` journey still captures/resumes its Ask. Update the operational skill and its contract checks. Installed-copy changes remain separately authorized.
+
 ## Invariants
 
 - INV-1: Starting from the five saved journeys, a stage advances only with coordinator-accepted scope, checks, source, and brief evidence. Any rejected attempt that advances is a failure.
