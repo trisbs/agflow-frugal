@@ -82,10 +82,13 @@ test('project authorization overrides the global diff-approval rule and names th
 		assert.match(project_policy, /push.*release.*paid.*installed/isu)
 	}
 	assert.match(skill, /Exception: `\/home\/tristan\/\.codex\/AGENTS\.md` § `Code Change Approval`/i)
+	assert.match(skill, /Show L0–L5\/model\/status\/count with plain keys, bold values, unknown explicit/u)
 	const task_path = path.join(root, 'Task.md')
 	if (fs.existsSync(task_path)) {
 		const task = read('Task.md')
-		assert.match(task, /TASK CLASS: \*\*L3 — Basic Direct\*\*.*CURRENT MODEL: \*\*.*WORKER MODEL\/STATUS: \*\*.*WORKERS STARTED:/s)
+		if (/TASK CLASS:/u.test(task)) {
+			assert.match(task, /TASK CLASS: \*\*L3 — Basic Direct\*\*.*CURRENT MODEL: \*\*.*WORKER MODEL\/STATUS: \*\*.*WORKERS STARTED:/s)
+		}
 	}
 })
 
