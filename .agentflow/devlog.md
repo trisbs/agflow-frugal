@@ -4,13 +4,13 @@ Project: agflow-frugal
 
 Notebook: .agentflow/devlog.md — root.
 
-Current commit: 8e601d6dbe8bcf2ef4195715878bc145be92b1ae.
+Current commit: local delivery recorded in Git history.
 
 Tests/scenarios: 8.4.0 candidate suite: 1467 passed/29 skipped; focused prompt-compression: 1 passed.
 
 Configuration: ag.json — schema v8; validated for codex this round.
 
-Proven: Local 8.4.0 candidate 59f38a4 reviewed PASS for Outcome, Minimality and Conformance; full suite passed; public delivery and installed-copy update remain unapproved.
+Proven: Local 8.4.0 candidate 59f38a4 reviewed PASS for Outcome, Minimality and Conformance; full suite passed; persistent prompt tracing enabled with estimated 40-70 input-token overhead per prompt.
 
 Open: Await owner choice on push/tag/publication and/or installed-copy update.
 
@@ -494,5 +494,34 @@ Resumed Phase 10 release readiness after the owner re-enabled persistent tracing
 ---
 
 # → Ask / A-008 (tristan)
+
++ what is the cost of godev help?
+
+# ← Reply / A-008
+
+* _2026-10-14 10:38:50 +0800 (gpt-6-luna/low)_
+
+## [SUMMARY]
+
+- `godev help` does not make a separate provider/API call. Its response uses the normal active Codex model.
+- Persistent tracing is enabled in this checkout, adding an estimated 40–70 input tokens per prompt.
+
+## [FINAL REPORT]
+
+1. What is the cost of `godev help`?
+
+   - The command itself has no separate charge or worker call. The normal prompt and answer use your active Codex usage as usual.
+   - This checkout currently has persistent tracing enabled (`.agentflow/.tmp/trace-mode.json`). Agentflow documents an estimated 40–70 extra input tokens per prompt while tracing is enabled; this is the only additional overhead identified for this prompt. The toggle itself does not make an extra model call.
+   - The exact monetary cost depends on the model usage and your account or plan; this workflow does not provide a dollar estimate.
+   - Evidence: installed Agentflow `scripts/README.md`, line 30, documents the trace overhead and no-extra-call behavior.
+
+## Questions (batched — each with a suggested default)
+
+- None.
+
+
+---
+
+# → Ask / A-009 (tristan)
 
 +
