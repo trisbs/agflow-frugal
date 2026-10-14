@@ -531,11 +531,11 @@ Minimality check: extend the current fixture harness and existing adapters rathe
 
 - Follow-up after the 2026-10-07 decision: on 2026-10-08, after the owner's explicit update instruction, the installed linter was synchronized with the development copy to address the stale-timestamp stop-hook failure. The development and installed linter/test files were hash-compared; the installed linter suite passed. This was an explicit update, not an automatic project action.
 
-- Release reminder: after R8 is complete, run the Phase 10 delivery sequence, inspect the exact staged files and release version, commit under the session's recorded authorization, run the installed smoke journey again, and push only when separately authorized.
+- Phase 10 delivery completed 2026-10-14: reviewed candidate `59f38a45a90f8735fa80af197308d651781457f8` is on `origin/main`, tag `v8.4.0` resolves to that commit, and the GitHub release is published. The installed skill was synchronized from the candidate; 141 source files match by SHA-256 and the installed-only `.setup-checked` marker was preserved. Backup: `/tmp/agf-installed-8.4.0-backup-WBvola/agflow-frugal`. Candidate shortcut smoke passed 1/1; installed shortcut smoke passed 1/1 and installed prompt-compression passed 17/17. The full candidate suite passed 1,467 tests with 29 skipped.
 
 #### Recommended next-stage tasks
 
-1. **Phase 10 release.** Local 8.4.0 candidate prepared and independently reviewed on 2026-10-13 from public `main` at `c906695`; candidate commit `59f38a45a90f8735fa80af197308d651781457f8` is in `/tmp/agf-release-8.4.0` on `release/8.4.0-local-candidate`. Its 149-file product diff excludes private `.agentflow` records, local `AGENTS.md`, developer `ag.json`, and setup markers. Review found and corrected a stale trace-command sentence in README; Outcome, Minimality, and Conformance pass. The full suite passes (1,467 passed, 29 skipped). Push, tag/publication, and installed-copy updates remain separately authorized.
+1. **Phase 10 release — completed 2026-10-14.** Candidate commit `59f38a45a90f8735fa80af197308d651781457f8`, prepared from public `main` at `c906695`, is published on `origin/main` with tag `v8.4.0` and a GitHub Release. The 149-file product diff excludes private `.agentflow` records, local `AGENTS.md`, developer `ag.json`, and setup markers. Review passed Outcome, Minimality, and Conformance; the full suite passed (1,467 passed, 29 skipped). The installed skill was synchronized and its source-file hashes match the candidate.
 
 2. Keep the release note and persistent no-auto-update preference intact. No further R8 work is open unless new evidence reopens an acceptance item.
 

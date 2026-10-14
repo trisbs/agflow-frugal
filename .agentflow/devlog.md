@@ -6,17 +6,17 @@ Notebook: .agentflow/devlog.md — root.
 
 Current commit: local delivery recorded in Git history.
 
-Tests/scenarios: 8.4.0 candidate suite: 1467 passed/29 skipped; focused prompt-compression: 1 passed; final installed smoke journey pending.
+Tests/scenarios: Candidate shortcut 1/1; candidate full suite 1467 passed/29 skipped; installed shortcut 1/1 and prompt-compression 17/17..
 
 Configuration: ag.json — schema v8; validated for codex this round.
 
-Proven: Candidate 59f38a4 independently reviewed PASS for Outcome, Minimality and Conformance; full suite passed; origin/main remains at public base and v8.4.0 tag is absent.
+Proven: 8.4.0 commit pushed to origin/main, v8.4.0 tag and GitHub Release published; installed source hashes match candidate and smoke suites pass..
 
-Open: Run the final installed-shortcut smoke journey; await explicit authorization for push/tag, and separately for publication or installed-copy update.
+Open: Next-stage godev help fast-path task is recorded but not implemented..
 
-Next: Perform the final installed smoke journey; recheck origin immediately before public push; execute only explicitly authorized release actions.
+Next: Implement the recorded godev help fast path when continued..
 
-Artifacts: .agentflow/artifacts/A-006-release-candidate/review-report.md; .agentflow/artifacts/A-006-release-candidate/review-brief.md; /tmp/agf-release-8.4.0.
+Artifacts: Task.md; candidate /tmp/agf-release-8.4.0; installed backup /tmp/agf-installed-8.4.0-backup-WBvola/agflow-frugal.
 
 Archived eras: .agentflow/devlog.archive.md.
 
@@ -666,5 +666,55 @@ Resumed Phase 10 release readiness after the owner re-enabled persistent tracing
 ---
 
 # → Ask / A-013 (tristan)
+
++ ok
+
++ do authorize pushing, tagging, publication, or updating the installed copy
+
++ approve to pushing, tagging, publication, and updating the installed copy
+
+---
+
+## [RUN-001] Event — 2026-10-14 11:00:21 +0800 (A-013)
+
+- Completed the approved 8.4.0 release: candidate smoke passed 1/1; pushed commit 59f38a45a90f8735fa80af197308d651781457f8 to origin/main, created annotated tag v8.4.0, published the GitHub Release, and verified remote main and peeled tag resolve to that commit. Installed copy at /home/tristan/.agents/skills/agflow-frugal was backed up to /tmp/agf-installed-8.4.0-backup-WBvola/agflow-frugal, synchronized, and SHA-256 checked: all 141 candidate source files match; installed-only .setup-checked preserved. Installed shortcut smoke passed 1/1 and prompt-compression passed 17/17.
+
+# ← Reply / A-013
+
+* _2026-10-14 11:00:21 +0800 (gpt-6-luna/low)_
+
+## [SUMMARY]
+
+The approved Agentflow Frugal 8.4.0 release is published, and the installed skill copy has been updated and verified.
+
+## [FINAL REPORT]
+
+1. Push the release commit and create the version tag.
+
+   - Completed: commit `59f38a45a90f8735fa80af197308d651781457f8` is on `origin/main`; annotated tag `v8.4.0` points to that commit.
+
+2. Publish the release.
+
+   - Completed: [Agentflow Frugal v8.4.0](https://github.com/trisbs/agflow-frugal/releases/tag/v8.4.0) is published. The release notes include the Added, Changed, and Fixed sections.
+
+3. Update the installed copy.
+
+   - Completed: synchronized `/home/tristan/.agents/skills/agflow-frugal`; all 141 candidate source files match by SHA-256, and the installed-only `.setup-checked` marker remains. Backup is at `/tmp/agf-installed-8.4.0-backup-WBvola/agflow-frugal`.
+
+4. Verify the installed shortcut journey.
+
+   - Passed: shortcut smoke 1/1 and prompt-compression suite 17/17 from the installed copy. Candidate shortcut smoke passed 1/1; full candidate suite passed 1,467 with 29 skipped.
+
+The next-stage `godev help` fast-path task remains recorded in `Task.md` and has not been implemented.
+
+
+## Questions (batched — each with a suggested default)
+
+- None.
+
+
+---
+
+# → Ask / A-014 (tristan)
 
 +
