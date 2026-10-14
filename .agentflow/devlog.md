@@ -6,17 +6,17 @@ Notebook: .agentflow/devlog.md — root.
 
 Current commit: local delivery recorded in Git history.
 
-Tests/scenarios: A-004 source suite 1467 passed/29 skipped; installed recovery 25/25; installed shortcut/terminal 219 passed/22 skipped; independent review passed.
+Tests/scenarios: 8.4.0 candidate suite: 1467 passed/29 skipped; focused prompt-compression: 1 passed.
 
 Configuration: ag.json — schema v8; validated for codex this round.
 
-Proven: A-004 candidate and local closeout complete; code commit a69f10b0be98864e76653f4fc92504c4c2c55795 has independent Outcome, Minimality, and Conformance PASS.
+Proven: local 8.4.0 candidate 59f38a4 reviewed PASS for Outcome, Minimality and Conformance; full suite passed.
 
-Open: Phase 10 public release awaits explicit authorization; push/publication also require separate authorization; global hook-scope alignment is owner-deferred.
+Open: public push/tag/publication and installed-copy update remain separately authorized.
 
-Next: Await explicit Phase 10 release request; persistent trace can be disabled with godev trace disable.
+Next: await explicit authorization for public delivery; keep candidate local.
 
-Artifacts: .agentflow/artifacts/A-004-trace-review/review-report.md; Task.md; docs/CHANGELOG.md.
+Artifacts: .agentflow/artifacts/A-006-release-candidate/review-report.md; .agentflow/artifacts/A-006-release-candidate/review-brief.md; /tmp/agf-release-8.4.0.
 
 Archived eras: .agentflow/devlog.archive.md.
 
@@ -403,5 +403,68 @@ Resumed Phase 10 release readiness after the owner re-enabled persistent tracing
 ---
 
 # → Ask / A-006 (tristan)
+
++ godev status
+
++ approve release
+
++ the network is fine
+
++ approve, finish it
+
++ Result Go: 59f38a45a90f8735fa80af197308d651781457f8
+
+---
+
+## [RUN-001] Event — 2026-10-14 10:34:29 +0800 (A-006)
+
+- The owner supplied Result Go for candidate 59f38a45a90f8735fa80af197308d651781457f8. Recorded source commit a6d918cc6d980d6f4dd90059815f2243ee2b22e4 contains only the reviewed README/test correction, with both blobs matching the public candidate. The independent review passes all three verdicts; the corrected candidate suite passed 1,467 tests with 29 skipped and none failed. No push, tag, publication, or installed-copy update occurred.
+
+# ← Reply / A-006
+
+* _2026-10-14 10:34:29 +0800 (gpt-6-luna/low)_
+
+## [SUMMARY]
+
+- The local 8.4.0 release candidate is prepared and reviewed; the README trace-command contradiction was corrected.
+- Verification passed: 1,467 passed, 29 skipped, 0 failed; the focused test passed.
+- No public push, tag, publication, or installed-skill update occurred. Those actions remain separately gated.
+
+## [FINAL REPORT]
+
+1. Current status.
+
+   - The candidate is ready for local release closeout on `release/8.4.0-local-candidate`, commit `59f38a45a90f8735fa80af197308d651781457f8`, based on public `main` at `c906695dbb5bd00c06963d4cd5c3c31d36ebe53c`.
+   - The candidate includes 149 product paths and excludes private `.agentflow/`, root `AGENTS.md`, root `ag.json`, and `.setup-checked`.
+   - The independent review passes Outcome, Minimality, and Conformance. It found that README described retired `godev trace` commands as active; the correction now points readers to `godev trace enable/disable`.
+   - The focused prompt-compression test passed, and the full candidate suite passed: 1,496 total, 1,467 passed, 29 skipped, 0 failed.
+
+   Key Records — read these first
+
+   - [Review report](.agentflow/artifacts/A-006-release-candidate/review-report.md) — records the review verdicts, source identity, evidence, and limits.
+
+   - [Review brief](.agentflow/artifacts/A-006-release-candidate/review-brief.md) — records the approved candidate scope, exclusions, and verification plan.
+
+2. Release approval and delivery boundary.
+
+   - Your `Result Go: 59f38a45a90f8735fa80af197308d651781457f8` authorized consequential local closeout; it is recorded in this round.
+   - The network check had succeeded earlier: `git ls-remote` and `git fetch origin main` completed, and the remote was rechecked with no `v8.4.0` tag. No network error blocked this work.
+   - The candidate remains local. No push, tag, public release, or installed-copy update was performed. The earlier release approval was scoped to local preparation, and this Result Go was specifically for closeout.
+
+3. Remaining action.
+
+   - To publish, authorize the push of candidate commit `59f38a45a90f8735fa80af197308d651781457f8` to `origin/main` and creation of tag `v8.4.0`. A GitHub Release publication or installed-skill update would require its own explicit authorization.
+
+
+## Questions (batched — each with a suggested default)
+
+1. Do you authorize pushing the reviewed candidate to `origin/main` and creating/pushing tag `v8.4.0`?
+
+   - Suggested default: Keep the reviewed candidate local until you request public delivery.
+   - ans:
+
+---
+
+# → Ask / A-007 (tristan)
 
 +

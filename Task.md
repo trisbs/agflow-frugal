@@ -535,7 +535,7 @@ Minimality check: extend the current fixture harness and existing adapters rathe
 
 #### Recommended next-stage tasks
 
-1. **Phase 10 release.** Waiting for an explicit release request. Then verify version metadata and exact staged files, run the final installed-copy smoke check, and follow the delivery checklist. Do not push or publish unless separately authorized.
+1. **Phase 10 release.** Local 8.4.0 candidate prepared and independently reviewed on 2026-10-13 from public `main` at `c906695`; candidate commit `59f38a45a90f8735fa80af197308d651781457f8` is in `/tmp/agf-release-8.4.0` on `release/8.4.0-local-candidate`. Its 149-file product diff excludes private `.agentflow` records, local `AGENTS.md`, developer `ag.json`, and setup markers. Review found and corrected a stale trace-command sentence in README; Outcome, Minimality, and Conformance pass. The full suite passes (1,467 passed, 29 skipped). Push, tag/publication, and installed-copy updates remain separately authorized.
 
 2. Keep the release note and persistent no-auto-update preference intact. No further R8 work is open unless new evidence reopens an acceptance item.
 
