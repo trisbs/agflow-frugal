@@ -10,7 +10,7 @@ Tests/scenarios: 8.4.0 candidate suite: 1467 passed/29 skipped; focused prompt-c
 
 Configuration: ag.json — schema v8; validated for codex this round.
 
-Proven: Local 8.4.0 candidate 59f38a4 reviewed PASS for Outcome, Minimality and Conformance; full suite passed; persistent prompt tracing enabled with estimated 40-70 input-token overhead per prompt.
+Proven: Local 8.4.0 candidate 59f38a4 reviewed PASS for Outcome, Minimality and Conformance; full suite passed; public delivery and installed-copy update remain unapproved.
 
 Open: Await owner choice on push/tag/publication and/or installed-copy update.
 
@@ -523,5 +523,38 @@ Resumed Phase 10 release readiness after the owner re-enabled persistent tracing
 ---
 
 # → Ask / A-009 (tristan)
+
++ godev help
+
+# ← Reply / A-009
+
+* _2026-10-14 10:41:11 +0800 (gpt-6-luna/low)_
+
+## [SUMMARY]
+
+- `godev` is the natural-language trigger for this project’s Agentflow workflow. Give the request after it in plain language.
+- The existing 8.4.0 candidate still awaits your choice on public delivery and installed-copy update.
+
+## [FINAL REPORT]
+
+1. `godev help`
+
+   - Common requests:
+     - `godev continue` — resume the current Ask and continue authorized work.
+     - `godev status` — summarize current project status, evidence, gates, and next steps.
+     - `godev add a task: <description>` — record a task for later work.
+     - `godev trace enable` / `godev trace disable` — enable or disable persistent tracing for this checkout when the Codex hook is installed.
+     - `godev finish remain tasks` — continue working through open tasks; separately gated delivery actions still need your authorization.
+   - For implementation plans, use `Design Go: <commit>` to authorize the reviewed design, then `Result Go: <commit>` to authorize the reviewed implementation result.
+   - Current project gate: choose whether to authorize push/tag/publication of candidate `59f38a4`, an installed-copy update, both, or neither. No public delivery or install has occurred.
+
+## Questions (batched — each with a suggested default)
+
+- None.
+
+
+---
+
+# → Ask / A-010 (tristan)
 
 +
