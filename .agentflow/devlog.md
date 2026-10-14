@@ -6,17 +6,17 @@ Notebook: .agentflow/devlog.md — root.
 
 Current commit: local delivery recorded in Git history.
 
-Tests/scenarios: 8.4.0 candidate suite: 1467 passed/29 skipped; focused prompt-compression: 1 passed; Task.md diff check passed.
+Tests/scenarios: 8.4.0 candidate suite: 1467 passed/29 skipped; focused prompt-compression: 1 passed; final installed smoke journey pending.
 
 Configuration: ag.json — schema v8; validated for codex this round.
 
-Proven: Next-stage task 4 records the `godev help` fast-path scope and acceptance; reviewed 8.4.0 candidate remains local and unreleased.
+Proven: Candidate 59f38a4 independently reviewed PASS for Outcome, Minimality and Conformance; full suite passed; origin/main remains at public base and v8.4.0 tag is absent.
 
-Open: Await explicit authorization for public push/tag/publication and/or installed-copy update; next-stage help workflow fix is recorded, not implemented.
+Open: Run the final installed-shortcut smoke journey; await explicit authorization for push/tag, and separately for publication or installed-copy update.
 
-Next: Keep the candidate local until authorized; implement the help fast path as a next-stage task.
+Next: Perform the final installed smoke journey; recheck origin immediately before public push; execute only explicitly authorized release actions.
 
-Artifacts: Task.md; .agentflow/artifacts/A-006-release-candidate/review-report.md; .agentflow/artifacts/A-006-release-candidate/review-brief.md; /tmp/agf-release-8.4.0.
+Artifacts: .agentflow/artifacts/A-006-release-candidate/review-report.md; .agentflow/artifacts/A-006-release-candidate/review-brief.md; /tmp/agf-release-8.4.0.
 
 Archived eras: .agentflow/devlog.archive.md.
 
@@ -631,5 +631,40 @@ Resumed Phase 10 release readiness after the owner re-enabled persistent tracing
 ---
 
 # → Ask / A-012 (tristan)
+
++ what else should i do before release it
+
+---
+
+## [RUN-001] Event — 2026-10-14 10:49:29 +0800 (A-012)
+
+- Rechecked `origin`: `main` is still at public base `c906695dbb5bd00c06963d4cd5c3c31d36ebe53c`, and no `v8.4.0` tag is present; candidate `59f38a45a90f8735fa80af197308d651781457f8` remains local.
+
+# ← Reply / A-012
+
+* _2026-10-14 10:49:29 +0800 (gpt-6-luna/low)_
+
+## [SUMMARY]
+
+- The v8.4.0 candidate is reviewed and its full suite passed; no public release has happened.
+- One release reminder remains: run the installed-shortcut smoke journey against the final candidate, then authorize the exact public delivery actions.
+
+## [FINAL REPORT]
+
+1. What else should I do before release?
+
+   - No more code changes or full-suite run are indicated by the current candidate review. It records PASS for Outcome, Minimality, and Conformance and 1,467 passed / 29 skipped.
+   - The release reminder in Task.md says to run the installed smoke journey again before pushing. The A-006 candidate review records the full suite but does not report this final installed journey, so that check remains.
+   - Then explicitly authorize pushing candidate `59f38a45a90f8735fa80af197308d651781457f8` to `origin/main` and creating/pushing tag `v8.4.0`. GitHub Release publication and an installed-copy update are separate actions and need separate authorization.
+   - I rechecked the remote: `origin/main` is still at the candidate’s public base `c906695dbb5bd00c06963d4cd5c3c31d36ebe53c`, and no `v8.4.0` tag exists. Recheck immediately before delivery in case the remote changes.
+
+## Questions (batched — each with a suggested default)
+
+- None.
+
+
+---
+
+# → Ask / A-013 (tristan)
 
 +
