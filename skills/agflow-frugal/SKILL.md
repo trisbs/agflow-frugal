@@ -21,6 +21,24 @@ Incident citations explain failures. Approved redesigns may replace obsolete rem
 
 Exception: `/home/tristan/.codex/AGENTS.md` § `Code Change Approval`; no approval for in-scope edits/commits. Show diff. No push/release/paid/install absent request
 
+## Exact help fast path
+
+For an exact `godev help` or `/godev help` request, return this usage without starting intake, capturing an Ask, reading prior Answers, or closing a notebook round:
+
+```text
+Agentflow usage
+
+- Start or describe work: `godev` followed by your request.
+- Resume the current task: `godev continue` or `godev next`.
+- Show this help: `godev help` or `/godev help`.
+- Keep one task with the main assistant: `fast-lane <task>`.
+- Check the current task: `godev status`.
+- In Codex, enable or disable prompt tracing: `godev trace enable` or `godev trace disable`.
+- Start a feature workspace: `new-feature: <name>` followed by the requested work.
+```
+
+The exact help command is intercepted before notebook startup when hooks are available. With no hook, use this same fast path directly. Requests such as `godev continue` or `godev next` remain on the normal notebook workflow: capture them and resume the current notebook through the standard startup below.
+
 ## Start here
 
 Already-launched looper workers follow their supplied plan directly, not this host startup/closeout protocol.
