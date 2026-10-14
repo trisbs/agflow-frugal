@@ -557,4 +557,31 @@ Resumed Phase 10 release readiness after the owner re-enabled persistent tracing
 
 # → Ask / A-010 (tristan)
 
++ 'I’ll read A-009 and check the project’s help text,...' why read A-009 for 'godev help'?
+
+# ← Reply / A-010
+
+* _2026-10-14 10:41:56 +0800 (gpt-6-luna/low)_
+
+## [SUMMARY]
+
+- I read A-009 because Agentflow’s resume instruction says to read the saved current Ask when startup reports it was already captured.
+- A-009 was the current request, not an older task; I should have explained that reason in my opening update.
+
+## [FINAL REPORT]
+
+1. Why read A-009 for `godev help`?
+
+   - Startup reported `current_ask_identifier: A-009` and `message.inserted: false` (`already_present`). The project skill says that when a prompt is already present, read the current Ask through the notebook end before resuming. I followed that saved-request rule.
+   - I was checking the current request, not searching prior history. Since your prompt itself was clear, my opening could have stated the reason more directly: I was following the resume rule to make sure I answered the saved Ask.
+
+## Questions (batched — each with a suggested default)
+
+- None.
+
+
+---
+
+# → Ask / A-011 (tristan)
+
 +
