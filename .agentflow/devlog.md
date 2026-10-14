@@ -4,17 +4,17 @@ Project: agflow-frugal
 
 Notebook: .agentflow/devlog.md — root.
 
-Current commit: local delivery recorded in Git history.
+Current commit: 8e601d6dbe8bcf2ef4195715878bc145be92b1ae.
 
 Tests/scenarios: 8.4.0 candidate suite: 1467 passed/29 skipped; focused prompt-compression: 1 passed.
 
 Configuration: ag.json — schema v8; validated for codex this round.
 
-Proven: local 8.4.0 candidate 59f38a4 reviewed PASS for Outcome, Minimality and Conformance; full suite passed.
+Proven: Local 8.4.0 candidate 59f38a4 reviewed PASS for Outcome, Minimality and Conformance; full suite passed; public delivery and installed-copy update remain unapproved.
 
-Open: public push/tag/publication and installed-copy update remain separately authorized.
+Open: Await owner choice on push/tag/publication and/or installed-copy update.
 
-Next: await explicit authorization for public delivery; keep candidate local.
+Next: After explicit authorization, perform only the selected delivery action; otherwise keep candidate local.
 
 Artifacts: .agentflow/artifacts/A-006-release-candidate/review-report.md; .agentflow/artifacts/A-006-release-candidate/review-brief.md; /tmp/agf-release-8.4.0.
 
@@ -466,5 +466,33 @@ Resumed Phase 10 release readiness after the owner re-enabled persistent tracing
 ---
 
 # → Ask / A-007 (tristan)
+
++ godev continue
+
+# ← Reply / A-007
+
+* _2026-10-14 10:37:59 +0800 (gpt-6-luna/low)_
+
+## [SUMMARY]
+
+- Continued A-007; no implementation or delivery was authorized by `godev continue`.
+- The reviewed 8.4.0 candidate remains local. Public push/tag/publication and installed-copy update each need your explicit authorization.
+
+## [FINAL REPORT]
+
+1. `godev continue`
+
+   - Incomplete at the delivery gate: STATUS says the reviewed local candidate is ready, but public delivery is still awaiting your authorization. The review report records PASS for Outcome, Minimality, and Conformance; the full candidate suite passed 1,467 tests with 29 skipped.
+   - No delivery or installed-copy update was performed. Those are separate actions.
+
+## Questions (batched — each with a suggested default)
+
+1. Which next step do you authorize: push candidate `59f38a4` to `origin/main` and create/push tag `v8.4.0`; update the installed copy; both; or neither?
+   - Suggested default: neither; keep the candidate local until you choose.
+   - ans:
+
+---
+
+# → Ask / A-008 (tristan)
 
 +
