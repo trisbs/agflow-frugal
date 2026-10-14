@@ -21,6 +21,18 @@ const trace_mode_command = prompt => {
   return match ? match[1].toLowerCase() === 'enable' : null;
 };
 const status_prompt = prompt => /^\s*\/?godev\s+status\s*$/iu.test(String(prompt || ''));
+const help_prompt = prompt => /^\s*\/?godev\s+help\s*$/iu.test(String(prompt || ''));
+const help_usage = [
+	'Agentflow usage',
+	'',
+	'- Start or describe work: `godev` followed by your request.',
+	'- Resume the current task: `godev continue` or `godev next`.',
+	'- Show this help: `godev help` or `/godev help`.',
+	'- Keep one task with the main assistant: `fast-lane <task>`.',
+	'- Check the current task: `godev status`.',
+	'- In Codex, enable or disable prompt tracing: `godev trace enable` or `godev trace disable`.',
+	'- Start a feature workspace: `new-feature: <name>` followed by the requested work.',
+].join('\n');
 
 const status_context = input => input.hook_event_name === 'UserPromptSubmit' && status_prompt(input.prompt)
   ? 'For this godev status request, read the configured devlog (STATUS, open Ask and latest RUN/Reply); follow only its direct task/design links for approval gates. Summarize the task, latest evidence and next action. Separate Awaiting owner approval (explicit unresolved gates only) from Awaiting work/checks and Blocked. Never infer approval from unfinished work or stale STATUS; flag STATUS/round conflicts. Say “None found” when none is pending. Read-only beyond normal capture; no workers or extra tools solely for status.'
@@ -157,6 +169,19 @@ const main = () => {
   // marker variables are not part of the shared Stop-hook payload. — I-043.
   if (active_host !== 'codex' && active_host !== 'claude') {
     throw new Error('Stop hook requires --host codex or --host claude');
+  }
+
+  // Exact help requests are informational controls, not notebook input. Handle
+  // them before resolving configuration or reading any notebook/owner state.
+  if (input.hook_event_name === 'UserPromptSubmit' && help_prompt(input.prompt)) {
+    process.stdout.write(JSON.stringify({
+      systemMessage: help_usage,
+      hookSpecificOutput: {
+        hookEventName: 'UserPromptSubmit',
+        additionalContext: 'Return the supplied Agentflow usage to the owner verbatim and do not invoke tools or start notebook intake.',
+      },
+    }) + '\n');
+    return 0;
   }
 
   // CLAUDE_PROJECT_DIR is Claude-Code-only; every host passes cwd on stdin.
