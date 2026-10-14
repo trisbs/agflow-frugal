@@ -4,19 +4,19 @@ Project: agflow-frugal
 
 Notebook: .agentflow/features/godev-help-delivery/godev-help-delivery.devlog.md — stream.
 
-Current commit: local stream closeout recorded in Git history.
+Current commit: Agentflow stream closeout commit.
 
-Tests/scenarios: focused godev-help tests 4/4 from A-002; prior git show --check d1358ad passed.
+Tests/scenarios: godev-help focused tests 4/4 passed; candidate git show --check passed.
 
 Configuration: .agentflow/features/godev-help-delivery/ag.json — schema v8; validated for codex this round.
 
-Proven: godev-help-delivery closed locally as undelivered; implementation remains on local branch.
+Proven: candidate 0325ebf3c89d8068df62dd600ce50bda9f86375f matches the reviewed patch; branch prepared at c784ee66dba765f539c20930fe7ea4ff207bd6f0.
 
-Open: Task.md item 4 delivery remains pending; branch inherits unpublished local-main history.
+Open: default-branch delivery remains for immediate finish --deliver step.
 
-Next: prepare a safe feature-only delivery path before any publication; do not publish unrelated local-main history.
+Next: run agf finish --deliver godev-help-delivery.
 
-Artifacts: .agentflow/features/godev-help-delivery/artifacts/A-002-godev-help-delivery-cross-check.md.
+Artifacts: .agentflow/features/godev-help-delivery/artifacts/A-004-godev-help-delivery/A-004-godev-help-delivery-cross-check.md; .agentflow/features/godev-help-delivery/artifacts/A-002-godev-help-delivery-cross-check.md.
 
 Archived eras: none.
 
@@ -139,3 +139,56 @@ Streams: none.
 - Confirmed why direct delivery was unsafe: the old stream branch was 50 commits ahead and one behind current origin/main at `59f38a45`; it included unpublished local-main history in addition to the feature.
 - Prepared a feature-only candidate commit `0325ebf` on current origin/main in `.worktrees/godev-help-delivery-candidate`. It changes only the three authorized files (220 insertions); its patch ID matches reviewed commit `d1358ad`, and the candidate has no unrelated history.
 - Verified the candidate focused tests: 4/4 passed; `git show --check` passed. No push, merge, install, or publication occurred. The earlier external review was unavailable; the documented host-review fallback reviewed the exact same patch.
+
+## [RUN-002] Event — 2026-10-14 16:25:33 +0800 (A-004)
+
+Agentflow preparation completed: the feature-only branch includes current origin/main and the origin/godev-help-delivery ref matches local HEAD at c784ee66dba765f539c20930fe7ea4ff207bd6f0.
+
+## [RUN-003] Event — 2026-10-14 16:25:33 +0800 (A-004)
+
+The delivery candidate remains 0325ebf3c89d8068df62dd600ce50bda9f86375f and changes exactly the three authorized source files. Its stable patch ID matches reviewed implementation d1358ad4ed187d46525310022dc8223b8c91feb4; focused tests previously passed 4/4 and source has not changed since.
+
+## [RUN-004] Event — 2026-10-14 16:25:33 +0800 (A-004)
+
+The first close check found that review evidence was outside A-004's artifact root and the branch lacked an upstream link. Added the current-Ask report and tracking ref; implementation files were not changed.
+
+# ← Reply / A-004
+
+* _2026-10-14 16:25:33 +0800 (codex/unknown)_
+
+## [SUMMARY]
+
+- Prepared the clean feature-only branch and recorded your approval. The immediate next step is `agf finish --deliver godev-help-delivery`.
+- The host review fallback applies. Automatic approval review rejected the external review because it would export repository source; live hook registration and display remain unverified.
+
+## [FINAL REPORT]
+
+1. Why godev-help-delivery was not delivered earlier
+
+   - The original stream branch was 50 commits ahead and one behind `origin/main`, so using it risked including unrelated local history. I should have continued after the first preparation attempt stopped on an uncommitted notebook.
+   - Your exact `Result Go` authorizes delivery of candidate `0325ebf3c89d8068df62dd600ce50bda9f86375f`. The clean feature-only branch is now prepared.
+
+2. Prepare and close godev-help-delivery
+
+   - Succeeded: candidate `0325ebf3c89d8068df62dd600ce50bda9f86375f` changes only `skills/agflow-frugal/SKILL.md`, `skills/agflow-frugal/scripts/stop-hook.js`, and `skills/agflow-frugal/scripts/godev-help.test.js` (220 insertions). Its stable patch identity matches reviewed implementation `d1358ad4ed187d46525310022dc8223b8c91feb4`.
+   - Focused tests passed 4/4 and `git show --check` passed before approval; source has not changed since. Agentflow preparation integrated current `origin/main`; the remote stream ref matches local HEAD `c784ee66dba765f539c20930fe7ea4ff207bd6f0`.
+   - This closeout marks the stream closed and ready for the immediate `agf finish --deliver` step. No install or release was performed.
+
+   Key Records — read these first
+
+   - [.agentflow/features/godev-help-delivery/artifacts/A-004-godev-help-delivery/A-004-godev-help-delivery-cross-check.md](.agentflow/features/godev-help-delivery/artifacts/A-004-godev-help-delivery/A-004-godev-help-delivery-cross-check.md) applies the existing review to the byte-identical candidate and records delivery preparation and limits.
+
+   - [.agentflow/features/godev-help-delivery/artifacts/A-002-godev-help-delivery-cross-check.md](.agentflow/features/godev-help-delivery/artifacts/A-002-godev-help-delivery-cross-check.md) contains the original detailed review of the implementation patch and the external-review limitation.
+
+
+Feature: godev-help-delivery — closed
+
+## Questions (batched — each with a suggested default)
+
+- None.
+
+---
+
+# → Ask / A-005 (tristan)
+
++
