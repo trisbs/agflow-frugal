@@ -74,7 +74,7 @@ for (const git_mode of [true, false]) test(`real terminal portable host, policy 
   if (git_mode) {
     for (const args of [['init', '-q', '-b', 'main'], ['config', 'user.name', 'PTY fixture'], ['config', 'user.email', 'pty@example.invalid']]) execFileSync('git', args, { cwd: root })
   }
-  const start = terminal(root, 'agf.js', ['start', '--repo', root, '--host', 'example-agent', '--host-family', 'codex', '--message-stdin', '--json'], 'portable terminal request\n')
+  const start = terminal(root, 'agf.js', ['start', '--repo', root, '--host', 'example-agent', '--message-stdin', '--json'], 'portable terminal request\n')
   assert.equal(start.status, 0, start.stdout + start.stderr)
   assert.match(start.stdout, /"status": "not_available"/)
   assert.equal(fs.existsSync(path.join(root, '.codex')), false)
@@ -105,7 +105,8 @@ for (const git_mode of [true, false]) test(`real terminal portable host, policy 
   fs.mkdirSync(tasks)
   const plan_file = path.join(tasks, 'plan-001.md')
   fs.writeFileSync(plan_file, '# Pending plan\n\nCreate pending-product.txt.\n')
-  const handoff = terminal(root, 'looper.js', ['--tasks-dir', tasks, '--completion-path', notebook])
+  const state_home = path.join(process.env.AGFLOW_TEST_HOME || os.homedir(), 'state')
+  const handoff = terminal(root, 'looper.js', ['--tasks-dir', tasks, '--completion-path', notebook], '', { XDG_STATE_HOME: state_home })
   assert.equal(handoff.status, 2, handoff.stdout + handoff.stderr)
   assert.match(handoff.stdout + handoff.stderr, /interactive host/)
   assert.equal(fs.readFileSync(plan_file, 'utf8'), '# Pending plan\n\nCreate pending-product.txt.\n')
@@ -114,7 +115,7 @@ for (const git_mode of [true, false]) test(`real terminal portable host, policy 
   // The queued plan remains a separate pending task; this round proves the
   // portable lifecycle and does not claim that plan's product was completed.
   const manifest = { version: 1, notebook, ask: 'A-001', run_events: [],
-    reply: '## [SUMMARY]\n\n- Verified portable terminal controls; the queue remains pending.\n\n## [FINAL REPORT]\n\n1. Startup, policy validation, manual capture and handoff verified.\n\n```completion-metadata\nHost review: PASS — inspected the fixture and terminal results.\n```\n',
+    reply: '## [SUMMARY]\n\n- Status: complete.\n- Result: startup, policy validation, manual capture, and handoff passed; the queue remains pending.\n- Owner action: none.\n- Next step: the queued plan remains for the interactive host.\n\n## [FINAL REPORT]\n\n1. Startup, policy validation, manual capture and handoff verified.\n\n```completion-metadata\nHost review: PASS — inspected the fixture and terminal results.\n```\n\n## Questions (batched — each with a suggested default)\n\n- None.\n',
     status: { project: 'portable terminal fixture', notebook, notebook_kind: 'root', current_commit: 'local delivery', tests_scenarios: 'real terminal journey', config_path: 'ag.json', host: 'example-agent', validation: 'validated', proven: 'portable lifecycle', open: 'one pending queue plan', next: 'resume queue in an interactive host', artifacts: '.agentflow/planned/plan-001.md', archived_eras: 'none', streams: [] },
     allowed_paths: [notebook, '.gitignore', 'ag.json'], commit_message: 'verify portable terminal controls', delivery: { mode: 'local' } }
   // Explicit waiver is fixture owner input, not an inferred policy fallback.
@@ -126,4 +127,29 @@ for (const git_mode of [true, false]) test(`real terminal portable host, policy 
   assert.match(text, /example-agent\/unknown/)
   assert.match(text, /# → Ask \/ A-002/)
   assert.equal(fs.existsSync(path.join(root, '.git')), git_mode)
+})
+
+test('generic-host startup outside project skill scope reports host-neutral hook availability', () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agf-generic-start-pty-')))
+  try {
+    const start = terminal(root, 'agf.js', ['start', '--repo', root, '--host', 'example-agent', '--host-family', 'codex', '--message-stdin', '--json'], 'generic host startup\n', { AGF_JOURNEY_CHANNELS: '1' })
+    assert.equal(start.status, 0, start.stdout + start.stderr)
+    const start_stdout = start.stdout.match(/CHILD_STDOUT\r?\n([\s\S]*?)\r?\nCHILD_STDERR/)?.[1]
+    assert.ok(start_stdout, start.stdout)
+    const result = JSON.parse(start_stdout)
+    assert.equal(result.hooks.status, 'not_available')
+    assert.equal(result.hooks.host, 'example-agent')
+    assert.equal(result.hooks.reason, 'no_host_hook_integration')
+    assert.equal(Object.hasOwn(result.hooks, 'config_path'), false)
+    assert.equal(Object.hasOwn(result.hooks, 'scope'), false)
+    assert.equal(Object.hasOwn(result.hooks, 'message'), false)
+    assert.match(result.hooks.instructions.capture, /capture each owner message/)
+    assert.match(result.hooks.instructions.closeout, /agf\.js close/)
+    assert.doesNotMatch(JSON.stringify(result.hooks), /\.claude|\.codex|project-scoped/)
+    assert.equal(result.hooks_restart_required, false)
+    assert.equal(fs.existsSync(path.join(root, '.codex')), false)
+    assert.equal(fs.existsSync(path.join(root, '.claude')), false)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
 })

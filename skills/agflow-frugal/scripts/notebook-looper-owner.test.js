@@ -164,7 +164,7 @@ test('interactive host uses its retained identity and accepts an already verifie
   assert.equal(c.notebook_ownership.session, 'interactive')
   writer.append_input({ root: f.root, notebook: f.notebook, host: 'portable', session: 'interactive', text: 'Complete this plan.' })
   writer.close_round({ root: f.root, notebook: f.notebook, host: 'portable', session: 'interactive', input: { ask: 'A-001', run_events: [], status,
-    reply: '# ← Reply / A-001\n\n## [SUMMARY]\n\n- Done.\n\n## [FINAL REPORT]\n\n- The saved round is complete.\n\n## Questions (batched — each with a suggested default)\n\n- None.\n' } })
+		reply: '# ← Reply / A-001\n\n## [SUMMARY]\n\n- Status: complete.\n- Result: the saved round is complete.\n- Owner action: none.\n- Next step: no further action is needed.\n\n## [FINAL REPORT]\n\n- The saved round is complete.\n\n## Questions (batched — each with a suggested default)\n\n- None.\n' } })
   assert.equal(inspect(f).owner.state, 'released')
   assert.equal(looper.finish_host_plan(c, execution(c)).completed, true)
   assert.equal(inspect(f).owner.token, c.notebook_ownership.token)

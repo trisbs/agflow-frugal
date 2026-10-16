@@ -107,11 +107,42 @@ const parse_args = argv => {
   return { scope, off, quiet, hosts };
 };
 
-const config_path_for = (host, scope, cwd = process.cwd()) => {
-  const base = scope === 'global' ? node_os.homedir() : cwd;
+const config_path_for = (host, scope, cwd = process.cwd(), home = node_os.homedir()) => {
+  const base = scope === 'global' ? home : cwd;
   const file = host === 'claude' ? node_path.join('.claude', 'settings.json') : node_path.join('.codex', 'hooks.json');
 
   return node_path.join(base, file);
+};
+
+const scope_for_skill = ({ skill_dir = node_path.resolve(__dirname, '..'), cwd = process.cwd(), home = node_os.homedir() } = {}) => {
+  const skill = node_path.resolve(skill_dir);
+  const working = canonical_path(cwd);
+  const inside = (root, candidate) => {
+    const relative = node_path.relative(root, candidate);
+    return relative === '' || (!relative.startsWith(`..${node_path.sep}`) && relative !== '..' && !node_path.isAbsolute(relative));
+  };
+  const global_roots = ['.agents', '.codex', '.claude'].map(host => node_path.join(home, host, 'skills', 'agflow-frugal'));
+  if (global_roots.some(root => inside(canonical_path(root), skill))) return { scope: 'global' };
+  const suffix = node_path.join('skills', 'agflow-frugal');
+  if (skill.endsWith(`${node_path.sep}${suffix}`)) {
+    let project_root = skill.slice(0, -suffix.length - 1);
+    if (['.agents', '.codex', '.claude'].includes(node_path.basename(project_root))) project_root = node_path.dirname(project_root);
+    const canonical_project = canonical_path(project_root);
+    if (inside(canonical_project, working)) return { scope: 'project', project_root: canonical_project };
+    // A stream worktree is a separate checkout of the same project. Treat it
+    // as inside the project installation boundary so startup verifies the
+    // project's hooks without attempting any host-config repair.
+    try {
+      const git = require('node:child_process').spawnSync('git', ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'], { cwd: working, encoding: 'utf8' });
+      if (git.status === 0) {
+        const [worktree_root, common] = git.stdout.trim().split(/\r?\n/u);
+        const project_git = require('node:child_process').spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: canonical_project, encoding: 'utf8' });
+        if (worktree_root && common && project_git.status === 0 && node_path.resolve(common) === node_path.resolve(project_git.stdout.trim())) return { scope: 'project', project_root: canonical_project };
+      }
+    } catch {}
+    return { scope: 'outside_project', project_root: canonical_path(project_root) };
+  }
+  return { scope: 'unresolved' };
 };
 
 const read_config = config_path => {
@@ -305,6 +336,34 @@ const install = ({ scope = 'project', off = false, quiet = false, hosts = HOSTS,
   return results.length === 1 ? results[0] : { status: 'available', hosts: results };
 };
 
+const verify = ({ scope = 'project', hosts = HOSTS, cwd = process.cwd(), home = node_os.homedir() } = {}) => {
+  const verify_host = host => {
+    if (!HOSTS.includes(host)) {
+      return { status: 'not_available', host, reason: 'no_host_hook_integration', instructions: manual_instructions(host) };
+    }
+    const config_path = config_path_for(host, scope, cwd, home);
+    let config;
+    try {
+      config = read_config(config_path);
+    } catch (error) {
+      return {
+        status: 'missing', host, scope, config_path, reason: 'invalid_config',
+        message: `The ${host} hook configuration at ${config_path} is unreadable or invalid (${error.message}). Repair it, then run: agf hooks --${scope} --host ${host}`,
+      };
+    }
+    const missing_events = ['Stop', 'UserPromptSubmit'].filter(event => !((config.hooks && config.hooks[event]) || []).some(entry =>
+      Array.isArray(entry.hooks) && entry.hooks.some(hook => is_our_command(hook.command, host))));
+    return missing_events.length === 0
+      ? { status: 'available', host, scope, config_path, changed: false }
+      : {
+        status: 'missing', host, scope, config_path, missing_events,
+        message: `Agentflow's ${host} ${scope}-scope hooks are missing from ${config_path} (${missing_events.join(', ')}). Install them explicitly with: agf hooks --${scope} --host ${host}`,
+      };
+  };
+  const results = hosts.map(verify_host);
+  return results.length === 1 ? results[0] : { status: results.every(result => result.status === 'available') ? 'available' : 'missing', hosts: results };
+};
+
 const inspect = ({ cwd = process.cwd(), scope = 'project', hosts = HOSTS } = {}) => {
   const found = [];
   for (const host of hosts) {
@@ -331,6 +390,6 @@ const main = () => {
   install(options);
 };
 
-module.exports = { install, inspect, config_path_for, apply_guard, hook_command_for, parse_owned_command };
+module.exports = { install, verify, inspect, config_path_for, scope_for_skill, apply_guard, hook_command_for, parse_owned_command };
 
 if (require.main === module) main();

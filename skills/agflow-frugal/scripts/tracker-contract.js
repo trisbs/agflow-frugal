@@ -91,7 +91,8 @@ const validation_facts = ({ repo, tracker, repository = require('./repository-st
     repository,
     text,
     file: { regular: entry.isFile(), symlink: entry.isSymbolicLink(), checked_identity: identity, opened_identity: identity, read_identity: identity },
-    format_only: true
+    format_only: true,
+    initiative_state: require('./initiative-state.js').validate_linked_files({ repo: absolute_repo, tracker_text: text })
   };
 };
 

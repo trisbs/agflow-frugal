@@ -29,7 +29,7 @@ const fixture_directory = (t, prefix) => {
 
 const fixture = (t, generated = false) => {
   const root = fixture_directory(t, path.join(os.tmpdir(), 'agf-queue-transports-'))
-  const scratch = path.join(os.homedir(), 'tmp')
+  const scratch = path.join(process.env.AGFLOW_TEST_HOME || os.homedir(), 'tmp')
   fs.mkdirSync(scratch, { recursive: true })
   assert.ok(!fs.lstatSync(scratch).isSymbolicLink(), 'home scratch directory must not be a symlink')
   const state_root = fixture_directory(t, path.join(scratch, '.agf-queue-transport-state-'))

@@ -25,6 +25,7 @@ const { resolve_default_branch } = require('./default-branch.js')
 const install_hook = require('./install-hook.js')
 const setup = require('./setup.js')
 const resume_intake = require('./resume-intake.js')
+const startup_lock = require('./startup-lock.js')
 const notebook_writer = require('./notebook-write.js')
 const completion_context = require('./completion-context.js')
 const { format_local_timestamp } = require('./local-time.js')
@@ -46,7 +47,7 @@ const USAGE_COMMANDS = [
 	{ label: 'ditch', syntax: 'agf ditch <taskkey>', description: 'abandon one stream after confirmation; no work is merged' },
 	{ label: 'uninstall', syntax: 'agf uninstall [--skills]', description: 'preview and remove owned project hooks and shell shortcuts; optionally preserve skill copies as recoverable backups' },
 	{ label: 'setup', syntax: 'agf setup [--fix]', description: 'check or install the shell shortcuts used to run Agentflow' },
-	{ label: 'hooks', syntax: 'agf hooks [--project|--global] [--host <name>] [--off]', description: 'install or remove verified Stop hooks and the project commit guard' },
+	{ label: 'hooks', syntax: 'agf hooks [--project|--global] [--host <name>] [--off|--status]', description: 'install, remove, or inspect verified hooks and recent invocation receipts' },
 	{ label: 'settings', syntax: 'agf settings <show|validate|change|rename> [options]', description: 'inspect or change the current project configuration' },
 	{ label: 'route', syntax: 'agf route <plan|run> --facts-stdin [--trace[=summary|full]]', description: 'plan or execute deterministic tier routing from one JSON facts object on standard input' },
 	{ label: 'route', syntax: 'agf route resume --task <task-id> [--trace[=summary|full]]', description: 'resume one persisted deterministic routing task' },
@@ -202,6 +203,39 @@ const parse_close_args = (argv) => {
 	}
 	if (!result.manifest_stdin) return { error: 'close requires --manifest-stdin' }
 	return result
+}
+
+const probe_git_metadata_write = (repo, { run_git = git, filesystem = fs, nonce = randomBytes(8).toString('hex') } = {}) => {
+	const common = run_git(repo, ['rev-parse', '--path-format=absolute', '--git-common-dir'])
+	if (!common.ok || !common.out) {
+		const git_missing = /(?:spawn|exec)\w*\s+git\s+ENOENT/i.test(common.out || '')
+		return { ok: false, code: git_missing ? 'git_unavailable' : 'metadata_unavailable', metadata_dir: null, detail: git_missing ? 'Git executable was not found in PATH' : `could not locate Git metadata: ${common.out || 'git dir was empty'}` }
+	}
+	const metadata_dir = path.resolve(repo, common.out)
+	const probe = path.join(metadata_dir, `.agf-write-probe-${nonce}`)
+	let created = false
+	try {
+		filesystem.writeFileSync(probe, '', { flag: 'wx', mode: 0o600 })
+		created = true
+		filesystem.unlinkSync(probe)
+		return { ok: true, metadata_dir }
+	} catch (error) {
+		if (created) {
+			try { filesystem.unlinkSync(probe) } catch (cleanup_error) {
+				return { ok: false, code: 'git_metadata_unwritable', metadata_dir, detail: `${error.code || 'ERROR'}: ${sanitize_diagnostic(error.message)}; temporary probe cleanup failed at ${probe}: ${sanitize_diagnostic(cleanup_error.message)}` }
+			}
+		}
+		return { ok: false, code: 'git_metadata_unwritable', metadata_dir, detail: `${error.code || 'ERROR'}: ${sanitize_diagnostic(error.message)}` }
+	}
+}
+
+const require_git_metadata_write = (repo, log) => {
+	const result = probe_git_metadata_write(repo)
+	if (result.ok) return true
+	if (result.code === 'git_unavailable') log(`Git is not available in this command environment (${result.detail}); install Git or restore it on PATH, then retry. No workflow mutation was started.`)
+	else if (result.code === 'metadata_unavailable') log(`Git metadata preflight failed (${result.detail}); verify Git and the repository path, then retry. No workflow mutation was started.`)
+	else log(`Git metadata is not writable${result.metadata_dir ? ` at ${result.metadata_dir}` : ''} (${result.detail}); make that Git directory writable, then retry. No workflow mutation was started.`)
+	return false
 }
 
 const update_ignore_file = (repo) => {
@@ -677,34 +711,6 @@ const write_text_atomic_preserve_mode = (file, text, mode) => {
 	}
 }
 
-const acquire_start_lock = repo => {
-	const lock_path = path.join(repo, '.agentflow-start.lock')
-	let descriptor
-	try {
-		descriptor = fs.openSync(lock_path, 'wx', 0o600)
-		fs.writeFileSync(descriptor, [
-			'Agentflow startup lock',
-			`pid: ${process.pid}`,
-			`started: ${format_local_timestamp()}`,
-			`repository: ${repo}`,
-			'',
-		].join('\n'), 'utf8')
-		fs.fsyncSync(descriptor)
-		return { path: lock_path, descriptor }
-	} catch (error) {
-		if (descriptor !== undefined) {
-			try { fs.closeSync(descriptor) } catch {}
-		}
-		if (error.code === 'EEXIST') return { path: lock_path, existing: true }
-		throw error
-	}
-}
-
-const release_start_lock = lock => {
-	if (!lock || lock.existing) return
-	try { fs.closeSync(lock.descriptor) } finally { fs.unlinkSync(lock.path) }
-}
-
 const read_start_message = () => {
 	const message = fs.readFileSync(0, 'utf8').replace(/\r\n?/gu, '\n')
 	if (message.trim().length === 0) throw new Error('start received an empty owner message on standard input')
@@ -770,6 +776,8 @@ const hook_result_for = (host, result) => result || (['codex', 'claude'].include
 	? { status: 'available', host }
 	: { status: 'not_available', host, reason: 'no_host_hook_integration', instructions: manual_hook_instructions(host) })
 
+const hook_config_relative_path = host => host === 'codex' ? '.codex/hooks.json' : host === 'claude' ? '.claude/settings.json' : null
+
 const start_result = ({ repo, host, host_family, notebook, notebook_text, intake, setup_result, message_result, provenance, git_identity, hook_result }) => ({
 	repository: repo,
 	notebook,
@@ -780,7 +788,7 @@ const start_result = ({ repo, host, host_family, notebook, notebook_text, intake
 	configuration: intake.configuration,
 	setup_created: setup_result.created,
 	setup_created_files: setup_result.created_files,
-	hooks_restart_required: setup_result.changed_files.includes(host === 'codex' ? '.codex/hooks.json' : '.claude/settings.json'),
+	hooks_restart_required: hook_config_relative_path(host) !== null && setup_result.changed_files.includes(hook_config_relative_path(host)),
 	hooks: hook_result_for(host, hook_result),
 	setup: {
 		created: setup_result.created,
@@ -816,7 +824,7 @@ const start_public_result = result => ({
 	setup_created: result.setup_created,
 	setup_created_files: result.setup_created_files,
 	hooks_restart_required: result.hooks_restart_required,
-	...(result.hooks.status === 'not_available' ? { hooks: result.hooks } : {}),
+	...(result.hooks.status !== 'available' ? { hooks: result.hooks } : {}),
 	message: result.message,
 	current_ask_identifier: result.current_ask_identifier,
 	changed_paths: result.changed_paths,
@@ -838,7 +846,7 @@ const emit_start_result = (result, args, repo, log) => {
 			setup_created: result.setup_created,
 			setup_created_files: result.setup_created_files,
 			hooks_restart_required: result.hooks_restart_required,
-			...(result.hooks.status === 'not_available' ? { hooks: result.hooks } : {}),
+			...(result.message.reason === 'activation_only' ? {} : (result.hooks.status !== 'available' ? { hooks: result.hooks } : {})),
 			message: result.message,
 		},
 	}
@@ -853,6 +861,8 @@ const emit_start_result = (result, args, repo, log) => {
 		log('hooks: not_available')
 		log(`manual capture: ${result.hooks.instructions.capture}`)
 		log(`manual closeout: ${result.hooks.instructions.closeout}`)
+	} else if (result.hooks.status === 'missing') {
+		log(result.hooks.message)
 	}
 	log(`current Ask: ${result.current_ask_identifier || 'none'}`)
 	log(`stream decision: ${result.stream_decision.reason}`)
@@ -875,11 +885,19 @@ const start_main = (argv, cwd, log, _ask, _width = 80) => {
 	const message = read_start_message()
 	const git_identity = top.ok ? repository_identity(repo) : { branch: null, head: null, state: 'unavailable' }
 	if (git_identity.error) throw new Error(git_identity.error)
+	const start_lock_probe = startup_lock.inspect_lock(path.join(repo, '.agentflow-start.lock'), repo)
+	const recovery_probe = startup_lock.inspect_recovery_guard(startup_lock.recovery_path_for(repo), repo)
+	const lock_probe = start_lock_probe.status !== 'missing' ? start_lock_probe : recovery_probe
 	let configured_target = '.agentflow/devlog.md'
 	let config_file = path.join(repo, 'ag.json')
 	if (fs.existsSync(config_file)) {
-		const existing_config = ag_settings.load_config(config_file, { repo_root: repo, active_host: args.host, persist_migration: false, ...(args.host_family ? { host_family: args.host_family } : {}) })
-		configured_target = existing_config.switches['target-doc'] || configured_target
+		try {
+			const existing_config = ag_settings.load_config(config_file, { repo_root: repo, active_host: args.host, persist_migration: false, ...(args.host_family ? { host_family: args.host_family } : {}) })
+			configured_target = existing_config.switches['target-doc'] || configured_target
+		} catch (error) {
+			if (lock_probe.status === 'missing') throw error
+			throw new Error(`A startup lock or recovery guard remains (${lock_probe.status}; ${path.relative(repo, lock_probe.path || startup_lock.recovery_path_for(repo))}); the current configuration could not be read: ${error.message}. This retry made no changes. Inspect the lock, configuration, and current Ask before retrying the same request.`)
+		}
 	}
 	if (top.ok && notebook_owner.linked_worktree(repo)) {
 		configured_target = stream_doc(repo, git_identity.branch)
@@ -887,14 +905,38 @@ const start_main = (argv, cwd, log, _ask, _width = 80) => {
 		config_file = ag_settings.resolve_config_path(repo, configured_target)
 		if (!fs.existsSync(config_file)) throw new Error('stream configuration is missing; restore its notebook/configuration pair before intake')
 	}
-	if (fs.existsSync(config_file) && !fs.existsSync(path.join(repo, configured_target))) throw new Error(`configured notebook ${configured_target} is missing; restore it or repair the pair explicitly`)
+	if (fs.existsSync(config_file) && !fs.existsSync(path.join(repo, configured_target)) && lock_probe.status === 'missing') throw new Error(`configured notebook ${configured_target} is missing; restore it or repair the pair explicitly`)
 	const resume_active = ['codex', 'claude'].includes(args.host) && is_godev_command(message)
 	const resume_snapshot = resume_active && fs.existsSync(path.join(repo, configured_target))
 		? notebook_owner.inspect({ root: repo, notebook: configured_target })
 		: undefined
-	let lock = acquire_start_lock(repo)
+	let lock = startup_lock.acquire(repo, {
+		recover_related_lock: previous => notebook_writer.recover_startup_artifacts({
+			root: repo,
+			notebook_path: path.join(repo, configured_target),
+			config_path: config_file,
+			startup_pid: previous.pid,
+		}),
+	})
 	if (lock.existing) {
-		const intake = resume_intake.collect_intake({ repo_root: repo, notebook_path: configured_target, active_host: args.host, ...(args.host_family ? { host_family: args.host_family } : {}), interrupted_start: true })
+		const owner = lock.pid ? `PID ${lock.pid}${lock.started_at ? `, started ${lock.started_at}` : ''}` : 'owner unknown'
+		let retry_instruction
+		if (lock.status === 'present') {
+			retry_instruction = `This retry did not write to the notebook; the lock records ${owner}, whose process is still present and may still own startup. The earlier attempt may already have saved its message. Wait for that process to exit, inspect the current Ask, then retry the same request if it is still absent.`
+		} else if (lock.status === 'recovery_in_progress') {
+			retry_instruction = `This retry did not write to the notebook; startup recovery is currently serialized by ${owner}. Wait for that brief recovery to finish, inspect the current Ask, then retry the same request if it is still absent.`
+		} else if (lock.status === 'recovery_guard_unverified' && lock.pid && startup_lock.process_state(lock.pid) === 'stale') {
+			retry_instruction = `Startup recovery stopped at a leftover guard (${path.relative(repo, lock.path)}). Its recorded process is gone. Inspect the current Ask, remove only this guard, then retry the same request if the message is absent.`
+		} else {
+			retry_instruction = `Startup lock recovery is not safe (${lock.detail || lock.status || 'unverified lock'}). This retry did not write to the notebook. Inspect ${path.relative(repo, lock.path)} and the current Ask, resolve the recorded owner, then retry the same request if it is still absent.`
+		}
+		let intake
+		try {
+			const lock_process_present = ['present', 'recovery_in_progress'].includes(lock.status)
+			intake = resume_intake.collect_intake({ repo_root: repo, notebook_path: configured_target, active_host: args.host, ...(args.host_family ? { host_family: args.host_family } : {}), interrupted_start: !lock_process_present, startup_in_progress: lock_process_present })
+		} catch (error) {
+			throw new Error(`Startup could not proceed because the lock is unresolved (${lock.status}; ${owner}) and intake could not read the configured notebook or settings: ${error.message}. ${retry_instruction}`)
+		}
 		const result = start_result({
 			repo,
 			host: args.host,
@@ -906,7 +948,7 @@ const start_main = (argv, cwd, log, _ask, _width = 80) => {
 				inserted: false,
 				reason: 'startup_lock_present',
 				owner_message: message,
-				retry_instruction: 'The owner message was not saved because another startup is still running. Retry this exact startup after it finishes to use fresh owner and notebook state.',
+					retry_instruction,
 			},
 			provenance: [],
 			git_identity,
@@ -916,12 +958,32 @@ const start_main = (argv, cwd, log, _ask, _width = 80) => {
 	}
 
 	let input_lock = null
+	let phase = 'startup baseline'
+	let ownership_guard_completed = false
 	try {
+		const before_paths = start_snapshot_paths(repo, args.host, configured_target)
+		const current_before = new Map(before_paths.map(relative => [relative, start_file_identity(path.join(repo, relative))]))
+		const previous_baseline = lock.recovered?.baseline
+		const paths_before = [...new Set([...(previous_baseline?.paths || []), ...before_paths])]
+		const before = new Map(paths_before.map(relative => [relative,
+			previous_baseline && Object.hasOwn(previous_baseline.before, relative)
+				? previous_baseline.before[relative]
+				: current_before.get(relative) ?? null,
+		]))
+		startup_lock.append(lock, { type: 'baseline', paths: paths_before, before: Object.fromEntries(before) })
+		const recovery_unproven = Boolean(lock.recovered && !previous_baseline && lock.recovered.phases.length > 0)
+		const recover_interrupted_bootstrap = Boolean(lock.recovered && previous_baseline
+			&& previous_baseline.before['ag.json'] === null
+			&& previous_baseline.before[configured_target] === null
+			&& lock.recovered.phases.includes('ownership_checked')
+			&& !lock.recovered.phases.includes('configuration_initialized'))
 		const guarded_file = notebook_owner.safe_path(repo, configured_target, true)
 		input_lock = notebook_writer.acquire_close_round_lock(`${guarded_file}.close-round.lock`)
+		phase = 'notebook ownership check'
 		const ownership = notebook_owner.guard({ root: repo, notebook: configured_target, host: args.host, session: args.session, allow_missing: true, resume_unclaimed: true, resume_active, resume_snapshot })
-		const before_paths = start_snapshot_paths(repo, args.host, configured_target)
-		const before = new Map(before_paths.map(relative => [relative, start_file_identity(path.join(repo, relative))]))
+		ownership_guard_completed = true
+		startup_lock.append(lock, { type: 'phase', name: 'ownership_checked' })
+		phase = 'project configuration initialization'
 		const initialized = fs.existsSync(config_file)
 			? ag_settings.ensure_configuration({
 				repo_root: repo,
@@ -930,16 +992,36 @@ const start_main = (argv, cwd, log, _ask, _width = 80) => {
 				explicit_host: args.host,
 				...(args.host_family ? { host_family: args.host_family } : {}),
 			})
-			: ag_settings.initialize_project({ repo_root: repo, explicit_host: args.host, ...(args.host_family ? { host_family: args.host_family } : {}) })
+			: ag_settings.initialize_project({ repo_root: repo, explicit_host: args.host, recover_interrupted_bootstrap, ...(args.host_family ? { host_family: args.host_family } : {}) })
+		startup_lock.append(lock, { type: 'phase', name: 'configuration_initialized' })
 		const notebook = start_relative(repo, initialized.notebook_path || path.join(repo, initialized.config.switches['target-doc']))
 		const paths = start_snapshot_paths(repo, args.host, notebook)
 		const notebook_file = path.join(repo, notebook)
 		if (!fs.existsSync(notebook_file)) throw new Error(`configured notebook ${notebook} is missing; restore it or repair the pair explicitly`)
+		phase = 'ignore-file update'
 		update_ignore_file(repo)
-		const hook_result = install_hook.install({ cwd: repo, hosts: [args.host], quiet: true, say: () => {} })
+		startup_lock.append(lock, { type: 'phase', name: 'ignore_updated' })
+		phase = 'hook installation verification'
+		const hook_scope = install_hook.scope_for_skill({ skill_dir: path.resolve(__dirname, '..'), cwd })
+		const hook_result = !['codex', 'claude'].includes(args.host)
+			? hook_result_for(args.host, null)
+			: hook_scope.scope === 'outside_project'
+			? {
+				status: 'missing', host: args.host, scope: 'project', config_path: path.join(hook_scope.project_root, args.host === 'codex' ? '.codex/hooks.json' : '.claude/settings.json'),
+				message: `This project-scoped Agentflow installation is for ${hook_scope.project_root}. Start inside that project or install Agentflow and its hooks globally before using it from ${cwd}.`,
+			}
+			: hook_scope.scope === 'unresolved'
+				? { status: 'missing', host: args.host, scope: 'unknown', message: 'Agentflow hook installation scope could not be identified. Run agf hooks --project inside a project or agf hooks --global for machine-wide setup.' }
+			: install_hook.verify({
+				cwd: hook_scope.scope === 'global' ? process.cwd() : hook_scope.project_root || repo,
+				hosts: [args.host],
+				scope: hook_scope.scope,
+				})
+		startup_lock.append(lock, { type: 'phase', name: 'hooks_verified' })
 		const setup_provenance = start_provenance({ repo, paths, before })
 		let message_result
 		try {
+			phase = 'owner message and input-scope save'
 			let original = notebook_writer.read_regular_file(notebook_file, 'notebook')
 			notebook_owner.verify(ownership)
 			original = require('./notebook-compact').compact_locked({ root: repo, notebook, original, force: false }).snapshot
@@ -950,10 +1032,12 @@ const start_main = (argv, cwd, log, _ask, _width = 80) => {
 			message_result.owner_message = message
 			const populated = resume_intake.final_ask_span(message_result.text || original.text)
 			if (populated && populated.text !== '+') notebook_writer.capture_input_scope(repo, notebook, args.host, populated.id, { ownership, session: args.session })
+			startup_lock.append(lock, { type: 'phase', name: populated && populated.text !== '+' ? 'owner_input_scope_saved' : 'owner_input_scope_unchanged' })
 			if (message_result.inserted) {
 				notebook_writer.verify_notebook_unchanged(notebook_file, original)
 				notebook_writer.atomic_replace(notebook_file, Buffer.from(message_result.text), original.mode)
 			}
+			startup_lock.append(lock, { type: 'phase', name: message_result.inserted ? 'owner_message_saved' : 'owner_message_already_present' })
 		} finally { notebook_writer.release_close_round_lock(input_lock); input_lock = null }
 		const provenance = start_provenance({ repo, paths, before })
 		const changed_files = setup_provenance.map(record => record.path)
@@ -963,13 +1047,32 @@ const start_main = (argv, cwd, log, _ask, _width = 80) => {
 			created_files,
 			changed_files,
 		}
-		release_start_lock(lock)
+		phase = 'intake and completion record'
+		const intake = resume_intake.collect_intake({ repo_root: repo, notebook_path: notebook, active_host: args.host, ...(args.host_family ? { host_family: args.host_family } : {}), bootstrap_provenance: provenance, interrupted_start: recovery_unproven })
+		startup_lock.append(lock, { type: 'phase', name: 'startup_complete' })
+		const lock_error = startup_lock.release(lock)
 		lock = null
-		const intake = resume_intake.collect_intake({ repo_root: repo, notebook_path: notebook, active_host: args.host, ...(args.host_family ? { host_family: args.host_family } : {}), bootstrap_provenance: provenance })
+		if (lock_error) throw new Error(`startup completed but lock cleanup needs recovery: ${lock_error}`)
 		return emit_start_result(start_result({ repo, host: args.host, host_family: args.host_family, notebook, notebook_text: message_result.text, intake, setup_result, message_result, provenance, git_identity, hook_result: Array.isArray(hook_result) ? hook_result[0] : hook_result }), args, repo, log)
+	} catch (error) {
+		if (input_lock !== null) { notebook_writer.release_close_round_lock(input_lock); input_lock = null }
+		if (lock !== null) {
+			if (!ownership_guard_completed) {
+				const cleanup_error = startup_lock.release(lock)
+				lock = null
+				if (cleanup_error) throw new Error(`${error.message} Startup lock cleanup needs recovery: ${cleanup_error}`)
+				throw error
+			}
+			const changed = git_identity.state === 'unavailable' ? [] : resume_intake.changed_paths(repo)
+			const journal_error = startup_lock.abandon(lock, phase, changed)
+			lock = null
+			const changed_text = changed.length ? changed.join(', ') : 'none detected'
+			throw new Error(`${error.message}\nStartup stopped during ${phase}; changed paths: ${changed_text}. The owner message may already be saved. Retry the same startup request after checking the current Ask; startup recovery will retain the original file baseline.${journal_error ? ` ${journal_error}` : ''}`)
+		}
+		throw error
 	} finally {
 		if (input_lock !== null) notebook_writer.release_close_round_lock(input_lock)
-		if (lock !== null) release_start_lock(lock)
+		if (lock !== null) startup_lock.release(lock)
 	}
 }
 
@@ -1084,6 +1187,15 @@ const merge_and_abort = (context, source, log) => {
 const main_recovery = (context) =>
 	`git -C ${shell_quote(context.repo)} switch ${shell_quote(context.def)} && git -C ${shell_quote(context.repo)} fetch origin && git -C ${shell_quote(context.repo)} merge --ff-only ${shell_quote(`origin/${context.def}`)}`
 
+const main_divergence_recovery = (context) =>
+	`git -C ${shell_quote(context.repo)} merge --no-edit ${shell_quote(`origin/${context.def}`)}`
+
+const is_commit_ancestor = (repo, older, newer) => {
+	const result = git(repo, ['merge-base', '--is-ancestor', older, newer])
+	if (result.ok) return true
+	return result.status === 1 ? false : null
+}
+
 const local_main_recovery = (context, source = context.key) =>
 	`git -C ${shell_quote(context.repo)} switch ${shell_quote(context.def)} && git -C ${shell_quote(context.repo)} merge --ff-only ${shell_quote(source)}`
 
@@ -1108,6 +1220,58 @@ const main_checkout_identity = (repo) => {
 	if (!tip.ok) return { error: git_failure_detail('reading the main checkout tip', tip) }
 	return { branch: branch.out, tip: tip.out }
 }
+
+const delivery_receipt_path = (context, key, commit) =>
+	path.join(context.git_common_dir, 'agf-delivery-receipts', `${key}-${commit}.json`)
+
+const read_delivery_receipt = (context, record) => {
+	const file = delivery_receipt_path(context, context.key, record.head)
+	let stat
+	try { stat = fs.lstatSync(file) } catch (error) {
+		if (error.code === 'ENOENT') return { file, receipt: null }
+		return { file, error: `cannot inspect delivery receipt ${file}: ${sanitize_diagnostic(error.message)}` }
+	}
+	if (!stat.isFile() || stat.isSymbolicLink()) return { file, error: `delivery receipt is not a regular file: ${file}` }
+	try {
+		const receipt = JSON.parse(fs.readFileSync(file, 'utf8'))
+		const states = ['not_configured', 'pending', 'unknown', 'failed', 'completed']
+		if (!is_plain_object(receipt) || receipt.version !== 1 || receipt.taskkey !== context.key || receipt.commit !== record.head
+			|| !is_plain_object(receipt.remote) || receipt.remote.name !== (context.has_remote ? 'origin' : null)
+			|| receipt.remote.branch !== (context.has_remote ? context.def : null) || !states.includes(receipt.remote.state)
+			|| !is_plain_object(receipt.local) || receipt.local.branch !== context.def || !states.includes(receipt.local.state)) {
+			return { file, error: `delivery receipt has an unsupported or mismatched format: ${file}` }
+		}
+		return { file, receipt }
+	} catch (error) {
+		return { file, error: `cannot read delivery receipt ${file}: ${sanitize_diagnostic(error.message)}` }
+	}
+}
+
+const write_delivery_receipt = (file, receipt) => {
+	const directory = path.dirname(file)
+	fs.mkdirSync(directory, { recursive: true })
+	const directory_stat = fs.lstatSync(directory)
+	if (!directory_stat.isDirectory() || directory_stat.isSymbolicLink()) throw new Error(`delivery receipt directory is not a regular directory: ${directory}`)
+	let mode = 0o600
+	try {
+		const existing = fs.lstatSync(file)
+		if (!existing.isFile() || existing.isSymbolicLink()) throw new Error(`delivery receipt is not a regular file: ${file}`)
+		mode = existing.mode & 0o777
+	} catch (error) {
+		if (error.code !== 'ENOENT') throw error
+	}
+	receipt.updated_at = format_local_timestamp()
+	write_text_atomic_preserve_mode(file, `${JSON.stringify(receipt, null, 2)}\n`, mode)
+}
+
+const new_delivery_receipt = (context, record) => ({
+	version: 1,
+	taskkey: context.key,
+	commit: record.head,
+	remote: { name: context.has_remote ? 'origin' : null, branch: context.has_remote ? context.def : null, state: context.has_remote ? 'pending' : 'not_configured' },
+	local: { branch: context.def, state: 'pending' },
+	updated_at: format_local_timestamp(),
+})
 
 const delivery_lock_path = (context) => path.join(context.git_common_dir, DELIVERY_LOCK_NAME)
 
@@ -1194,7 +1358,7 @@ const acquire_delivery_lock = (context) => {
 
 	try {
 		lock.stat = stat_identity(fs.fstatSync(fd))
-		fs.writeSync(fd, details, null, 'utf8')
+		write_all_sync(fd, details)
 		fs.fsyncSync(fd)
 	} catch (error) {
 		const close_error = close_delivery_lock_fd(lock)
@@ -1688,6 +1852,7 @@ const finish_main = (argv, cwd, log, _ask, width = 80) => {
 	if (args.error) { log(`${args.error}\n\n${render_usage(width)}`); return 1 }
 	const context = finish_context(cwd, args.key)
 	if (context.error) { log(context.error); return 1 }
+	if (!require_git_metadata_write(context.repo, log)) return 1
 
 	if (args.phase === 'prep') {
 		if (context.has_remote) {
@@ -1737,6 +1902,21 @@ const finish_main = (argv, cwd, log, _ask, width = 80) => {
 		if (record.error) { log(record.error); return 1 }
 		const expected = main_checkout_identity(context.repo)
 		if (expected.error) { log(`delivery stopped — ${expected.error}`); return 1 }
+		const loaded_receipt = read_delivery_receipt(context, record)
+		if (loaded_receipt.error) { log(`delivery stopped — ${loaded_receipt.error}; inspect or preserve the receipt before retrying`); return 1 }
+		const receipt = loaded_receipt.receipt || new_delivery_receipt(context, record)
+		const persist_receipt = () => {
+			try { write_delivery_receipt(loaded_receipt.file, receipt); return '' }
+			catch (error) { return `could not save delivery receipt ${loaded_receipt.file}: ${sanitize_diagnostic(error.message)}` }
+		}
+		if (!loaded_receipt.receipt) {
+			const receipt_error = persist_receipt()
+			if (receipt_error) { log(`delivery stopped before remote or local mutation — ${receipt_error}`); return 1 }
+		}
+		const mark_local = state => {
+			receipt.local.state = state
+			return persist_receipt()
+		}
 
 		if (context.has_remote) {
 			const source_error = delivery_source_error(context, record)
@@ -1744,125 +1924,225 @@ const finish_main = (argv, cwd, log, _ask, width = 80) => {
 				log(`delivery stopped before remote default-ref mutation — ${source_error}`)
 				return 1
 			}
-			delivery_state.remote_default = 'unknown'
-			const pushed = git(context.worktree, ['push', 'origin', `${record.head}:${context.def}`])
-			if (!pushed.ok) {
-				delivery_state.remote_default = pushed.timed_out ? 'unknown' : 'failed'
-				log(pushed.timed_out
-					? `delivery push timed out after ${git_timeout_limit(pushed)}ms; the remote default-branch result is unknown and local delivery was not attempted`
-					: 'delivery push failed; origin rejected the update. The stream branch is unchanged. If the default branch moved, run agf finish --prep again; if direct pushes are blocked, open a pull request from the stream branch.')
+			const remote_check = git(context.worktree, ['ls-remote', 'origin', `refs/heads/${context.def}`])
+			if (!remote_check.ok) {
+				receipt.remote.state = 'unknown'
+				const save_error = persist_receipt()
+				log(`delivery stopped before push — could not inspect origin/${context.def}; the remote result is unknown${save_error ? `; ${save_error}` : '; retry after checking the remote branch'}`)
 				return 1
 			}
+			const remote_sha = remote_check.out.split(/\s+/u)[0] || ''
+			if (remote_sha === record.head) {
+				receipt.remote.state = 'completed'
+				const save_error = persist_receipt()
+				if (save_error) { log(`origin/${context.def} already contains ${record.head}, but ${save_error}`); return 1 }
+				log(`verified origin/${context.def} already contains ${record.head}; skipping repeat push`)
+			} else if (receipt.remote.state === 'completed') {
+				log(`delivery stopped — receipt records ${record.head} on origin/${context.def}, but the current remote tip is ${remote_sha || 'missing'}; inspect remote movement before retrying`)
+				return 1
+			} else {
+				receipt.remote.state = 'unknown'
+				const before_push_error = persist_receipt()
+				if (before_push_error) { log(`delivery stopped before push — ${before_push_error}`); return 1 }
+				delivery_state.remote_default = 'unknown'
+				const pushed = git(context.worktree, ['push', 'origin', `${record.head}:${context.def}`])
+				if (!pushed.ok) {
+					delivery_state.remote_default = pushed.timed_out ? 'unknown' : 'failed'
+					receipt.remote.state = pushed.timed_out ? 'unknown' : 'failed'
+					const save_error = persist_receipt()
+					log(pushed.timed_out
+						? `delivery push timed out after ${git_timeout_limit(pushed)}ms; the remote default-branch result is unknown and local delivery was not attempted${save_error ? `; ${save_error}` : ''}`
+						: `delivery push failed; origin rejected the update. The stream branch is unchanged. If the default branch moved, run agf finish --prep again; if direct pushes are blocked, open a pull request from the stream branch.${save_error ? ` ${save_error}` : ''}`)
+					return 1
+				}
+				const verify_remote = git(context.worktree, ['ls-remote', 'origin', `refs/heads/${context.def}`])
+				const verified_sha = verify_remote.ok ? (verify_remote.out.split(/\s+/u)[0] || '') : ''
+				if (!verify_remote.ok || verified_sha !== record.head) {
+					delivery_state.remote_default = 'unknown'
+					receipt.remote.state = 'unknown'
+					const save_error = persist_receipt()
+					log(`push returned success, but origin/${context.def} could not be verified at ${record.head}; remote result is unknown${save_error ? `; ${save_error}` : '; inspect the remote before retrying'}`)
+					return 1
+				}
+				delivery_state.remote_default = 'completed'
+				receipt.remote.state = 'completed'
+				const save_error = persist_receipt()
+				if (save_error) { log(`origin/${context.def} was updated to ${record.head}, but ${save_error}; inspect the remote before retrying`); return 1 }
+				log(`pushed validated stream commit ${record.head} to origin/${context.def}`)
+			}
 			delivery_state.remote_default = 'completed'
-			log(`pushed validated stream commit ${record.head} to origin/${context.def}`)
+			const local_attempt_error = mark_local('unknown')
+			if (local_attempt_error) { log(`origin/${context.def} contains ${record.head}, but ${local_attempt_error}; local delivery was not attempted`); return 1 }
 			const fetched = git(context.repo, ['fetch', 'origin'])
 			if (!fetched.ok) {
+				receipt.local.state = fetched.timed_out ? 'unknown' : 'failed'
+				const save_error = persist_receipt()
 				log(fetched.timed_out
-					? `remote default branch was updated, but origin fetch timed out after ${git_timeout_limit(fetched)}ms and the main-checkout delivery result is unknown`
-					: 'remote default branch was updated but the main checkout was not — origin fetch failed')
+					? `remote default branch was updated, but origin fetch timed out after ${git_timeout_limit(fetched)}ms and the main-checkout delivery result is unknown${save_error ? `; ${save_error}` : ''}`
+					: `remote default branch was updated but the main checkout was not — origin fetch failed${save_error ? `; ${save_error}` : ''}`)
 				log(`recover with: ${main_recovery(context)}`)
 				return 1
 			}
 			const collision = local_delivery_collision(context, record.head, expected.tip)
 			if (collision && collision.error) {
+				const save_error = mark_local('failed')
 				log(`remote default branch was updated but the main checkout was not — ${collision.error}`)
+				if (save_error) log(save_error)
 				log(`recover with: ${main_recovery(context)}`)
 				return 1
 			}
 			if (collision) {
+				const save_error = mark_local('failed')
 				log(`remote default branch was updated but the main checkout was not — local delivery would replace an untracked or ignored entry at "${sanitize_diagnostic(collision.path)}"`)
+				if (save_error) log(save_error)
 				log(`recover with: ${main_recovery(context)}`)
 				return 1
 			}
 			const before_merge = main_checkout_identity(context.repo)
 			if (before_merge.error || before_merge.branch !== expected.branch || before_merge.tip !== expected.tip) {
+				const save_error = mark_local('failed')
 				log(`remote default branch was updated but the main checkout was not — the checkout changed during delivery (expected "${expected.branch}" at ${expected.tip}, found "${before_merge.branch || 'unknown'}" at ${before_merge.tip || 'unknown'})`)
+				if (save_error) log(save_error)
 				log(`recover with: ${main_recovery(context)}`)
 				return 1
 			}
 			if (before_merge.branch !== context.def) {
+				const save_error = mark_local('failed')
 				log(`remote default branch was updated but the main checkout was not — it is on "${before_merge.branch}", not "${context.def}"`)
+				if (save_error) log(save_error)
 				log(`recover with: ${main_recovery(context)}`)
 				return 1
 			}
 			const local_source_error = delivery_source_error(context, record)
 			if (local_source_error) {
+				const save_error = mark_local('failed')
 				log(`remote default branch was updated but the main checkout was not — delivery stopped before local default-ref mutation: ${local_source_error}`)
+				if (save_error) log(save_error)
 				log(`recover with: ${main_recovery(context)}`)
 				return 1
 			}
+			const already_delivered = is_commit_ancestor(context.repo, record.head, expected.tip)
+			if (already_delivered === true) {
+				const save_error = mark_local('completed')
+				if (save_error) { log(`local main already contains ${record.head}, but ${save_error}`); return 1 }
+				log(`local main already contains ${record.head}; skipping repeat merge`)
+				return { dir: context.repo }
+			}
 			delivery_state.local_checkout = 'unknown'
+			const before_merge_error = mark_local('unknown')
+			if (before_merge_error) { log(`origin/${context.def} contains ${record.head}, but ${before_merge_error}; local merge was not attempted`); return 1 }
 			const merged = git(context.repo, ['merge', '--ff-only', record.head])
 			if (!merged.ok) {
 				delivery_state.local_checkout = merged.timed_out ? 'unknown' : 'failed'
+				receipt.local.state = merged.timed_out ? 'unknown' : 'failed'
+				const save_error = persist_receipt()
 				log(merged.timed_out
-					? `remote default branch was updated, but local fast-forward delivery timed out after ${git_timeout_limit(merged)}ms and its result is unknown`
-					: `remote default branch was updated but the main checkout was not — fast-forward delivery failed: ${sanitize_diagnostic(merged.out)}`)
-				log(`recover with: ${main_recovery(context)}`)
+					? `remote default branch was updated, but local fast-forward delivery timed out after ${git_timeout_limit(merged)}ms and its result is unknown${save_error ? `; ${save_error}` : ''}`
+					: `remote default branch was updated but the main checkout was not — fast-forward delivery failed: ${sanitize_diagnostic(merged.out)}${save_error ? `; ${save_error}` : ''}`)
+				const local_is_ancestor = merged.timed_out ? null : is_commit_ancestor(context.repo, expected.tip, record.head)
+				if (local_is_ancestor === false) {
+					log(`local ${context.def} and origin/${context.def} have diverged; preserve both commit histories by reviewing and running: ${main_divergence_recovery(context)}`)
+				} else {
+					log(`recover with: ${main_recovery(context)}`)
+				}
 				return 1
 			}
 			delivery_state.local_checkout = 'completed'
 			const after_merge = main_checkout_identity(context.repo)
 			if (after_merge.error || after_merge.branch !== context.def || after_merge.tip !== record.head) {
+				receipt.local.state = 'unknown'
+				const save_error = persist_receipt()
 				log(`remote default branch was updated, but post-success checkout verification failed — expected "${context.def}" at ${record.head}, found "${after_merge.branch || 'unknown'}" at ${after_merge.tip || 'unknown'}`)
+				if (save_error) log(save_error)
 				log(`recover with: ${main_recovery(context)}`)
 				return 1
 			}
+			const save_error = mark_local('completed')
+			if (save_error) { log(`remote and local delivery completed at ${record.head}, but ${save_error}`); return 1 }
 			log(`delivered origin/${context.def} to the main checkout`)
 			return { dir: context.repo }
 		}
 
 		log('no remote configured — delivery is local only')
 		if (expected.branch !== context.def) {
+			const save_error = mark_local('failed')
 			log(`the main checkout is on "${expected.branch}", not "${context.def}" — nothing was changed`)
+			if (save_error) log(save_error)
 			log(`recover with: ${local_main_recovery(context)}`)
 			return 1
 		}
 		const collision = local_delivery_collision(context, record.head, expected.tip)
 		if (collision && collision.error) {
+			const save_error = mark_local('failed')
 			log(`local delivery stopped — ${collision.error}`)
+			if (save_error) log(save_error)
 			log(`recover with: ${local_main_recovery(context, record.head)}`)
 			return 1
 		}
 		if (collision) {
+			const save_error = mark_local('failed')
 			log(`local delivery stopped — it would replace an untracked or ignored entry at "${sanitize_diagnostic(collision.path)}"`)
+			if (save_error) log(save_error)
 			log(`recover with: ${local_main_recovery(context, record.head)}`)
 			return 1
 		}
 		const before_merge = main_checkout_identity(context.repo)
 		if (before_merge.error || before_merge.branch !== expected.branch || before_merge.tip !== expected.tip) {
+			const save_error = mark_local('failed')
 			log(`local delivery stopped — the checkout changed during delivery (expected "${expected.branch}" at ${expected.tip}, found "${before_merge.branch || 'unknown'}" at ${before_merge.tip || 'unknown'})`)
+			if (save_error) log(save_error)
 			log(`recover with: ${local_main_recovery(context, record.head)}`)
 			return 1
 		}
 		if (before_merge.branch !== context.def) {
+			const save_error = mark_local('failed')
 			log(`the main checkout is on "${before_merge.branch}", not "${context.def}" — nothing was changed`)
+			if (save_error) log(save_error)
 			log(`recover with: ${local_main_recovery(context, record.head)}`)
 			return 1
 		}
 		const source_error = delivery_source_error(context, record)
 		if (source_error) {
+			const save_error = mark_local('failed')
 			log(`local delivery stopped before default-ref mutation — ${source_error}`)
+			if (save_error) log(save_error)
 			log(`recover with: ${local_main_recovery(context, record.head)}`)
 			return 1
 		}
+		const already_delivered = is_commit_ancestor(context.repo, record.head, expected.tip)
+		if (already_delivered === true) {
+			const save_error = mark_local('completed')
+			if (save_error) { log(`local main already contains ${record.head}, but ${save_error}`); return 1 }
+			log(`local main already contains ${record.head}; skipping repeat merge`)
+			return { dir: context.repo }
+		}
 		delivery_state.local_checkout = 'unknown'
+		const before_merge_error = mark_local('unknown')
+		if (before_merge_error) { log(`local delivery stopped before merge — ${before_merge_error}`); return 1 }
 		const merged = git(context.repo, ['merge', '--ff-only', record.head])
 		if (!merged.ok) {
 			log(merged.timed_out
 				? `local fast-forward delivery timed out after ${git_timeout_limit(merged)}ms; the result is unknown`
 				: `local delivery failed — the main checkout was not changed: ${sanitize_diagnostic(merged.out)}`)
 			delivery_state.local_checkout = merged.timed_out ? 'unknown' : 'failed'
+			receipt.local.state = merged.timed_out ? 'unknown' : 'failed'
+			const save_error = persist_receipt()
+			if (save_error) log(save_error)
 			log(`recover with: ${local_main_recovery(context, record.head)}`)
 			return 1
 		}
 		delivery_state.local_checkout = 'completed'
 		const after_merge = main_checkout_identity(context.repo)
 		if (after_merge.error || after_merge.branch !== context.def || after_merge.tip !== record.head) {
+			receipt.local.state = 'unknown'
+			const save_error = persist_receipt()
 			log(`local delivery completed, but post-success checkout verification failed — expected "${context.def}" at ${record.head}, found "${after_merge.branch || 'unknown'}" at ${after_merge.tip || 'unknown'}`)
+			if (save_error) log(save_error)
 			log(`recover with: ${local_main_recovery(context, record.head)}`)
 			return 1
 		}
+		const save_error = mark_local('completed')
+		if (save_error) { log(`local delivery completed at ${record.head}, but ${save_error}`); return 1 }
 		log(`delivered ${context.key} to the local main checkout`)
 		return { dir: context.repo }
 		})()
@@ -1896,6 +2176,7 @@ const new_main = (argv, cwd, log, ask, width = 80) => {
 		log('this is a worktree, not the main checkout — run agf from the main project folder')
 		return 1
 	}
+	if (!require_git_metadata_write(repo, log)) return 1
 
 	const taskkey = next_key(resolve_key(args), known_keys(repo))
 	const wt_rel = path.join('.worktrees', taskkey)
@@ -2152,6 +2433,9 @@ const clean_main = (argv, cwd, log, ask, width = 80) => {
 		log(`could not snapshot local ${def} before cleanup — nothing was changed`)
 		return 1
 	}
+
+	// Check Git's shared metadata before fetch, merge, ref deletion, or worktree removal.
+	if (!require_git_metadata_write(repo, log)) return 1
 
 	// Step 1 — level the default branch with the server.
 	if (has_remote) {
@@ -2484,7 +2768,29 @@ const setup_main = (argv, cwd, log, ask, width = 80) => {
 	return setup.main({ argv, ask, say: log })
 }
 
-const hooks_help = width => `${usage_words('usage: agf hooks [--project|--global] [--host <id|all>] [--off]', width).join('\n')}\n\n${usage_words('Project scope is the default. Generic hosts report not_available with manual capture and closeout instructions.', width).join('\n')}\n`
+const hooks_help = width => `${usage_words('usage: agf hooks [--project|--global] [--host <id|all>] [--off|--status]', width).join('\n')}\n\n${usage_words('Project scope is the default. --status checks hook registration and recent local invocation receipts; registration alone cannot prove that the host loaded a change.', width).join('\n')}\n${usage_words('Generic hosts report not_available with manual capture and closeout instructions.', width).join('\n')}\n`
+
+const hooks_status = ({ cwd, scope, hosts, log }) => {
+	const registration = install_hook.verify({ cwd, scope, hosts })
+	const results = Array.isArray(registration.hosts) ? registration.hosts : [registration]
+	const hook_events = require('./hook-events.js')
+	let missing_receipt = false
+	for (const result of results) {
+		log(`${result.host} ${scope} hooks: ${result.status}${result.config_path ? ` — ${result.config_path}` : ''}`)
+		if (result.message) log(result.message)
+		if (result.status === 'not_available') continue
+		const summary = hook_events.summarize(hook_events.read_recent({ root: cwd, host: result.host }))
+		for (const event of ['UserPromptSubmit', 'Stop']) {
+			const latest = summary[event].latest
+			if (!latest) {
+				missing_receipt = true
+				log(`${result.host} ${event}: no invocation receipt observed`)
+			} else log(`${result.host} ${event}: ${latest.state} — ${latest.outcome} at ${latest.at}; correlation=${latest.correlation_scope}${summary[event].repeated_correlation ? ' (repeated event correlation)' : ''}${summary[event].other_event_in_session ? ' (other hook observed in the same session)' : ''}`)
+		}
+	}
+	if (results.some(result => result.status === 'available') && missing_receipt) log('An available config does not prove the host loaded it; no receipt cannot distinguish an unloaded hook from an event not invoked. If hooks changed since host startup, restart the host, then submit a prompt and finish a round to verify both events.')
+	return registration.status === 'available' || registration.status === 'not_available' ? 0 : 1
+}
 
 const hooks_main = (argv, cwd, log, ask, width = 80) => {
 	if (argv.some(argument => argument === '-h' || argument === '--help')) {
@@ -2495,7 +2801,7 @@ const hooks_main = (argv, cwd, log, ask, width = 80) => {
 		log(`hooks accepts only one scope\n\n${hooks_help(width)}`)
 		return 1
 	}
-	const allowed = new Set(['--project', '--global', '--off'])
+	const allowed = new Set(['--project', '--global', '--off', '--status'])
 	let host = 'all'
 	for (let index = 0; index < argv.length; index += 1) {
 		if (argv[index] === '--host') {
@@ -2512,11 +2818,18 @@ const hooks_main = (argv, cwd, log, ask, width = 80) => {
 		log(`unknown --host value "${host}"\n\n${hooks_help(width)}`)
 		return 1
 	}
+	if (argv.includes('--off') && argv.includes('--status')) {
+		log(`hooks accepts either --off or --status, not both\n\n${hooks_help(width)}`)
+		return 1
+	}
+	const scope = argv.includes('--global') ? 'global' : 'project'
+	const hosts = host === 'all' ? ['claude', 'codex'] : [host]
+	if (argv.includes('--status')) return hooks_status({ cwd, scope, hosts, log })
 	install_hook.install({
 		cwd,
-		scope: argv.includes('--global') ? 'global' : 'project',
+		scope,
 		off: argv.includes('--off'),
-		hosts: host === 'all' ? ['claude', 'codex'] : [host],
+		hosts,
 		say: log,
 	})
 	return 0
@@ -2595,9 +2908,12 @@ const close_main = (argv, cwd, log, _ask, _width = 80) => {
 			const controls = ag_settings.read_notebook_controls(repo, manifest.notebook)
 			const inline_reply = controls['inline-reply'] === 'on'
 			const saved = notebook_writer.read_regular_file(validated.notebook_file, 'notebook').text
-			const round = require('./round-linter').parse_devlog(saved).rounds.find(round => round.id === manifest.ask)
+			const round_linter = require('./round-linter')
+			const round = round_linter.parse_devlog(saved).rounds.find(round => round.id === manifest.ask)
 			if (!round?.reply_text.trim()) throw new Error('completed Reply is missing from the saved notebook')
-			display = { inline_reply, text: inline_reply ? round.reply_text.replace(/\r?\n---\s*$/u, '').trim() : `${manifest.notebook} updated` }
+			const full_reply = round.reply_text.replace(/\r?\n---\s*$/u, '').trim()
+			const summary = round_linter.reply_summary_text(round.reply_text).trim() || full_reply
+			display = { inline_reply, text: inline_reply ? full_reply : `${summary}\n\n${manifest.notebook} updated` }
 		}
 		return { json: result.ok ? close_success_result(result, display) : result, exitCode: result.ok ? 0 : 1 }
 	} catch (error) {
@@ -2671,7 +2987,7 @@ const main = (argv, cwd, log, ask, width = 80) => {
 module.exports = {
 	kebab_case, is_key, next_key, parse_new_args, parse_clean_args, parse_finish_args, resolve_key,
 	parse_start_args, parse_close_args, parse_route_args, read_route_facts, route_main, render_usage, devlog_template, key_from_path, default_from_origin_head,
-	is_yes, near_keys, stream_doc, host_from_root_status, active_host_for_cli, sanitize_diagnostic, git_timeout_ms, delivery_lock_path, write_all_sync, update_ignore_file, init_main, start_main, close_main, new_main, finish_main, clean_main, ditch_main, uninstall_main, setup_main, hooks_main, settings_main, main,
+	is_yes, near_keys, stream_doc, host_from_root_status, active_host_for_cli, sanitize_diagnostic, git_timeout_ms, delivery_lock_path, delivery_receipt_path, probe_git_metadata_write, require_git_metadata_write, write_all_sync, update_ignore_file, init_main, start_main, close_main, new_main, finish_main, clean_main, ditch_main, uninstall_main, setup_main, hooks_main, settings_main, main,
 }
 
 if (require.main === module) {

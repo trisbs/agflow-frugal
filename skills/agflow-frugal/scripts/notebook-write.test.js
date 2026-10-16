@@ -245,6 +245,29 @@ const setup = ({ relative = '.agentflow/devlog.md', text, mode = 0o644 } = {}) =
   return { root, notebook_path, notebook_file, draft_path, draft_file };
 };
 
+node_test.test('startup artifact recovery leaves linked workspace temp files untouched', () => {
+  const fixture = setup();
+  const external = make_root();
+  try {
+    node_fs.rmSync(node_path.join(fixture.root, '.agentflow'), { recursive: true, force: true });
+    node_fs.symlinkSync(external, node_path.join(fixture.root, '.agentflow'), 'dir');
+    const temporary = node_path.join(external, `devlog.md.2147483647.123.${'a'.repeat(16)}.tmp`);
+    node_fs.writeFileSync(temporary, 'preserve linked data');
+    const result = require('./notebook-write').recover_startup_artifacts({
+      root: fixture.root,
+      notebook_path: node_path.join(fixture.root, '.agentflow/devlog.md'),
+      config_path: node_path.join(fixture.root, 'ag.json'),
+      startup_pid: 2147483647,
+    });
+    node_assert.equal(result.recovered, false);
+    node_assert.match(result.detail, /symbolic link/u);
+    node_assert.equal(node_fs.readFileSync(temporary, 'utf8'), 'preserve linked data');
+  } finally {
+    node_fs.rmSync(fixture.root, { recursive: true, force: true });
+    node_fs.rmSync(external, { recursive: true, force: true });
+  }
+});
+
 const emulate_mode = (t, platform, observed_mode) => {
   const original_platform = Object.getOwnPropertyDescriptor(process, 'platform');
   const chmod = node_fs.chmodSync;
@@ -303,6 +326,7 @@ node_test.test('Windows permission mapping preserves Claude receipts and later o
 
 node_test.test('startup --json reports the receipt path when permission preservation fails', () => {
   const root = make_root();
+  node_child_process.execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: root });
   const preload = write(root, 'mode-failure.cjs', [
     "const fs = require('node:fs');",
     'const chmod = fs.chmodSync;',
@@ -348,9 +372,9 @@ const stdin_command = (operation, notebook_path, ask_id = 'A-001') => [
   '--input-stdin'
 ];
 
-const reply = (ask_id = 'A-001', body = '## [SUMMARY]\n\n- Done.\n\n## Questions (batched — each with a suggested default)\n\n- None.') => `# ← Reply / ${ask_id}\n\n${body}\n`;
+const reply = (ask_id = 'A-001', body = '## [SUMMARY]\n\n- Status: complete.\n- Result: the requested write completed.\n- Owner action: none.\n- Next step: none.\n\n## Questions (batched — each with a suggested default)\n\n- None.') => `# ← Reply / ${ask_id}\n\n${body}\n`;
 
-const complete_reply = ask_id => reply(ask_id, '## [SUMMARY]\n\n- Done.\n\n## [FINAL REPORT]\n\n- The saved round is complete.\n\n## Questions (batched — each with a suggested default)\n\n- None.');
+const complete_reply = ask_id => reply(ask_id, '## [SUMMARY]\n\n- Status: complete.\n- Result: the saved round is complete.\n- Owner action: none.\n- Next step: none.\n\n## [FINAL REPORT]\n\n- The saved round is complete.\n\n## Questions (batched — each with a suggested default)\n\n- None.');
 
 const complete_status_fields = () => ({
   project: 'test',
@@ -929,7 +953,7 @@ node_test.test('append-reply closes only the exact final Ask and creates the nex
   const notebook_file = write(root, notebook_path, old, 0o640);
   ownership_fixture.adopt(root, notebook_path);
   const draft_path = 'reply.md';
-  write(root, draft_path, reply('A-002', '## [SUMMARY]\n\n- Done.\n\n## [FINAL REPORT]\n\n- The checkpointed round is complete.\n\n## Questions (batched — each with a suggested default)\n\n- None.'));
+  write(root, draft_path, reply('A-002', '## [SUMMARY]\n\n- Status: complete.\n- Result: the checkpointed round is complete.\n- Owner action: none.\n- Next step: none.\n\n## [FINAL REPORT]\n\n- The checkpointed round is complete.\n\n## Questions (batched — each with a suggested default)\n\n- None.'));
   const before = read_bytes(notebook_file);
 
   const result = run_writer(root, reply_command(root, notebook_path, draft_path, 'A-002'));

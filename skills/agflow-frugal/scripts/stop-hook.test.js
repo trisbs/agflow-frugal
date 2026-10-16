@@ -5,7 +5,7 @@ const node_fs = require('node:fs');
 const node_os = require('node:os');
 const node_path = require('node:path');
 const node_test = require('node:test');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawnSync } = require('node:child_process');
 const ag_settings = require('./ag-settings.js');
 const { format_local_timestamp } = require('./local-time.js');
 
@@ -28,6 +28,26 @@ node_test.test('prompt submission saves steering immediately without running com
   node_assert.doesNotMatch(text, /agentflow-input:|^>/mu);
   node_assert.ok(text.includes('  # → Ask / A-999'));
   node_assert.match(result, /UserPromptSubmit/);
+  const receipts = require('./hook-events.js').read_recent({ root, host: 'codex' });
+  node_assert.equal(receipts.length, 1);
+  node_assert.equal(receipts[0].outcome, 'capture_saved');
+  const receipt_dir = require('./hook-events.js').receipt_root(root);
+  const receipt_text = node_fs.readFileSync(node_path.join(receipt_dir, node_fs.readdirSync(receipt_dir)[0]), 'utf8');
+  node_assert.doesNotMatch(receipt_text, /Keep the existing behavior/);
+});
+
+node_test.test('hook event receipt failure is reported but does not block the host hook', () => {
+  const project_dir = make_project(null);
+  const outside = node_fs.mkdtempSync(node_path.join(node_os.tmpdir(), 'stop-hook-receipt-outside-'));
+  node_fs.symlinkSync(outside, node_path.join(project_dir, '.agentflow', '.tmp'));
+  const result = spawnSync(process.execPath, [hook_path, '--host', 'codex'], {
+    cwd: project_dir,
+    input: JSON.stringify({ cwd: project_dir, hook_event_name: 'Stop' }),
+    encoding: 'utf8'
+  });
+  node_assert.equal(result.status, 0);
+  node_assert.match(result.stderr, /event receipt unavailable; continuing without correlation evidence/);
+  node_assert.equal(node_fs.readdirSync(outside).length, 0);
 });
 
 node_test.test('prompt hook adopts a manually saved multi-question Ask without duplicating it', () => {
@@ -106,7 +126,10 @@ ${reply_body}
 
 const valid_reply_body = `## [SUMMARY]
 
-- did the thing
+- **Status:** complete
+- **Result:** did the thing
+- **Owner action:** none
+- **Next step:** no further action is needed
 
 ## Verification, route, and mechanics
 
@@ -137,6 +160,12 @@ const write_audit_decision = (project_dir, line) => {
   node_fs.writeFileSync(node_path.join(project_dir, '.agentflow/.devlog.audit.md'), `## A-001\n\n- ${line}\n`);
 };
 
+const active_stop_report = `Status: In progress
+Result: reviewed the current issue and recorded the next implementation step
+Cause: implementation and verification remain
+Owner action: none
+Next step: continue the scoped fix`;
+
 const run_hook = (project_dir, stdin_obj, host = 'codex', environment_overrides = {}) => {
   const env = { ...process.env };
   for (const markers of Object.values(ag_settings.host_markers)) {
@@ -147,17 +176,26 @@ const run_hook = (project_dir, stdin_obj, host = 'codex', environment_overrides 
 
   try {
     const args = host === null ? [hook_path] : [hook_path, '--host', host];
-    execFileSync('node', args, {
-      input: JSON.stringify({ cwd: project_dir, ...stdin_obj }),
+    const payload = { cwd: project_dir, ...stdin_obj };
+    if (!Object.hasOwn(stdin_obj, 'last_assistant_message')) {
+      const notebook = node_path.join(project_dir, '.agentflow/devlog.md');
+      if (node_fs.existsSync(notebook)) {
+        const parsed = require('./round-linter.js').parse_devlog(node_fs.readFileSync(notebook, 'utf8'));
+        const current_round = parsed.rounds.find(round => round.text === parsed.last_round);
+        if (current_round?.ask_text.trim() && !current_round.reply_text.trim()) payload.last_assistant_message = active_stop_report;
+      }
+    }
+    const stdout = execFileSync('node', args, {
+      input: JSON.stringify(payload),
       cwd: project_dir,
       env,
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe']
     });
 
-    return { code: 0, stderr: '' };
+    return { code: 0, stdout, stderr: '' };
   } catch (error) {
-    return { code: error.status, stderr: String(error.stderr || '') };
+    return { code: error.status, stdout: String(error.stdout || ''), stderr: String(error.stderr || '') };
   }
 };
 
@@ -203,7 +241,18 @@ node_test.test('stop-hook derives required review when a first round changes a p
 
 const make_skip_review_project = (changed_path, changed_text, reason = 'owner accepts no independent review for this change') => {
   const prior = `# → Ask / A-000\n\n+ prior\n\n# ← Reply / A-000\n* _${taipei_stamp()} (test-model)_\n\n${valid_reply_body}\n\n---\n\n`;
-  const devlog = round_ending_in_scaffold(valid_reply_body, taipei_stamp())
+  const implementation_reply = valid_reply_body.replace('## Verification, route, and mechanics', `## [FINAL REPORT]
+
+- The requested change is complete.
+
+### Outcome coverage
+
+| Requested outcome | Delivered result | Evidence | Status |
+| --- | --- | --- | --- |
+| Complete the requested change | The requested change is complete | Focused fixture check | Verified |
+
+## Verification, route, and mechanics`);
+  const devlog = round_ending_in_scaffold(implementation_reply, taipei_stamp())
     .replace('# → Ask / A-001', `${prior}# → Ask / A-001`)
     .replace('+ do the thing', `+ skip-review: ${reason}`)
     .replaceAll('## [SUMMARY]', 'Host review: PASS — inspected fixture source and test evidence; no blocking findings.\n\n## [SUMMARY]');
@@ -224,6 +273,16 @@ node_test.test('stop-hook accepts skip-review for documentation and source chang
   const source_project = make_skip_review_project('app.js', 'module.exports = true;\n', 'urgent local source change');
   const source_result = run_hook(source_project, {});
   node_assert.strictEqual(source_result.code, 0, source_result.stderr);
+});
+
+node_test.test('stop-hook blocks changed source without outcome coverage even when review is waived', () => {
+  const project = make_skip_review_project('app.js', 'module.exports = true;\n');
+  const notebook = node_path.join(project, '.agentflow/devlog.md');
+  const text = node_fs.readFileSync(notebook, 'utf8').replace(/### Outcome coverage[\s\S]*?\n\n## Questions/u, '## Questions');
+  node_fs.writeFileSync(notebook, text);
+  const result = run_hook(project, {});
+  node_assert.strictEqual(result.code, 2);
+  node_assert.match(result.stderr, /outcome_coverage/);
 });
 
 node_test.test('stop-hook ignores an arbitrary decision in a legacy audit file', () => {
@@ -340,7 +399,7 @@ ${scope_event ? `## [RUN-001] Event — ${stamp} (during round A-002)\n\n- **Sco
 
 node_test.test('exits 0 for an honest round with the mandatory headings', () => {
   const project_dir = make_project(round_ending_in_scaffold(valid_reply_body, taipei_stamp()));
-  const result = run_hook(project_dir, { stop_hook_active: false });
+  const result = run_hook(project_dir, { hook_event_name: 'Stop', stop_hook_active: false });
 
   node_assert.strictEqual(result.code, 0);
 });
@@ -377,7 +436,7 @@ node_test.test('reads the adjacent stream notebook in a named worktree', () => {
   const open_stream = round_ending_in_scaffold(valid_reply_body, taipei_stamp()).split('# ← Reply / A-001')[0];
   node_fs.writeFileSync(node_path.join(stream_dir, 'fix-2.devlog.md'), open_stream);
 
-  const result = run_hook(project_dir, { stop_hook_active: false });
+  const result = run_hook(project_dir, { stop_hook_active: false, last_assistant_message: active_stop_report });
   node_assert.strictEqual(result.code, 0, result.stderr);
 });
 
@@ -425,7 +484,10 @@ node_test.test('accepts a Claude host opening a configuration without a stored h
 node_test.test('allows a completed Reply with the mandatory headings', () => {
   const body = `## [SUMMARY]
 
-- did the thing
+- **Status:** complete
+- **Result:** did the thing
+- **Owner action:** none
+- **Next step:** no further action is needed
 
 ## Questions (batched — each with a suggested default)
 
@@ -437,26 +499,126 @@ None.`;
   node_assert.strictEqual(result.stderr, '');
 });
 
-node_test.test('exits 2 for a future timestamp in the completed Reply behind the scaffold', () => {
-  const project_dir = make_project(round_ending_in_scaffold(valid_reply_body, taipei_stamp(48 * 3600000)));
+node_test.test('blocks a completed Reply whose SUMMARY omits required stop fields', () => {
+  const body = `## [SUMMARY]\n\n- The work is complete.\n\n## Questions (batched — each with a suggested default)\n\n- None.`;
+  const project_dir = make_project(round_ending_in_scaffold(body, taipei_stamp()));
   const result = run_hook(project_dir, { stop_hook_active: false });
 
   node_assert.strictEqual(result.code, 2);
+  node_assert.match(result.stderr, /reply_structure/);
+  node_assert.match(result.stderr, /Status, Result, Owner action, Next step/);
+});
+
+node_test.test('exits 2 for a future timestamp in the completed Reply behind the scaffold', () => {
+  const project_dir = make_project(round_ending_in_scaffold(valid_reply_body, taipei_stamp(48 * 3600000)));
+  const result = run_hook(project_dir, { hook_event_name: 'Stop', stop_hook_active: false });
+
+  node_assert.strictEqual(result.code, 2);
   node_assert.match(result.stderr, /timestamps_sane/);
+  const receipt = require('./hook-events.js').read_recent({ root: project_dir, host: 'codex' })[0];
+  node_assert.equal(receipt.state, 'blocked');
+  node_assert.equal(receipt.outcome, 'stop_blocked');
 });
 
 node_test.test('an editable future WIP warns without blocking an active round', () => {
   const active = round_ending_in_scaffold(valid_reply_body, taipei_stamp())
     .replace(/# ← Reply \/ A-001[\s\S]*$/u, `## [WIP-001] Checkpoint — ${local_stamp(48 * 3600000)} (during round A-001)\n`);
   const project_dir = make_project(active);
-  const result = run_hook(project_dir, { stop_hook_active: false });
+  const result = run_hook(project_dir, { stop_hook_active: false, last_assistant_message: active_stop_report });
 
   node_assert.strictEqual(result.code, 0);
 });
 
-node_test.test('exits 0 under the stop_hook_active loop guard even for a broken round', () => {
+node_test.test('records an unstructured active-stop response without surfacing hook feedback', () => {
+  const project_dir = make_project('# → Ask / A-001\n\n+ Finish the requested work.\n');
+  const result = run_hook(project_dir, { hook_event_name: 'Stop', stop_hook_active: false, session_id: 'session-1', turn_id: 'turn-1', last_assistant_message: 'Done.' });
+
+  node_assert.strictEqual(result.code, 0);
+  node_assert.equal(result.stderr, '');
+  node_assert.equal(result.stdout, '');
+  const receipt = require('./hook-events.js').read_recent({ root: project_dir, host: 'codex' })[0];
+  node_assert.equal(receipt.outcome, 'stop_report_incomplete');
+});
+
+node_test.test('duplicate Stop registrations do not surface report-correction feedback', () => {
+  const project_dir = make_project('# → Ask / A-001\n\n+ Finish the requested work.\n');
+  const payload = { hook_event_name: 'Stop', stop_hook_active: false, session_id: 'session-1', turn_id: 'duplicate-turn', last_assistant_message: 'Done.' };
+  const first = run_hook(project_dir, payload);
+  const duplicate = run_hook(project_dir, payload);
+
+  node_assert.equal(first.code, 0);
+  node_assert.equal(first.stderr, '');
+  node_assert.equal(duplicate.code, 0);
+  node_assert.equal(duplicate.stderr, '');
+  node_assert.equal(duplicate.stdout, '');
+  const receipts = require('./hook-events.js').read_recent({ root: project_dir, host: 'codex' });
+  node_assert.equal(receipts[0].outcome, 'stop_report_incomplete');
+});
+
+node_test.test('records an active Stop with no inspectable assistant response without feedback', () => {
+  const project_dir = make_project('# → Ask / A-001\n\n+ Finish the requested work.\n');
+  const result = run_hook(project_dir, { hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: null });
+
+  node_assert.strictEqual(result.code, 0);
+  node_assert.equal(result.stderr, '');
+  const receipt = require('./hook-events.js').read_recent({ root: project_dir, host: 'codex' })[0];
+  node_assert.equal(receipt.outcome, 'stop_report_incomplete');
+});
+
+node_test.test('active-stop response requires Cause when the stated status is incomplete', () => {
+  const project_dir = make_project('# → Ask / A-001\n\n+ Finish the requested work.\n');
+  const report = `Status: In progress\nResult: work remains\nOwner action: none\nNext step: continue`;
+  const result = run_hook(project_dir, { hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: report });
+
+  node_assert.strictEqual(result.code, 0);
+  node_assert.equal(result.stderr, '');
+  const receipt = require('./hook-events.js').read_recent({ root: project_dir, host: 'codex' })[0];
+  node_assert.equal(receipt.outcome, 'stop_report_incomplete');
+});
+
+node_test.test('accepts a concise active-stop report from the direct Stop payload', () => {
+  const project_dir = make_project('# → Ask / A-001\n\n+ Finish the requested work.\n');
+  const result = run_hook(project_dir, { stop_hook_active: false, last_assistant_message: active_stop_report });
+
+  node_assert.strictEqual(result.code, 0, result.stderr);
+});
+
+node_test.test('records a malformed response after the single correction retry without showing another checker message', () => {
+  const project_dir = make_project('# → Ask / A-001\n\n+ Finish the requested work.\n');
+  const result = run_hook(project_dir, {
+    hook_event_name: 'Stop',
+    stop_hook_active: true,
+    session_id: 'retry-session',
+    turn_id: 'retry-turn',
+    last_assistant_message: 'Done.'
+  });
+
+  node_assert.strictEqual(result.code, 0);
+  node_assert.equal(result.stdout, '');
+  node_assert.equal(result.stderr, '');
+  const receipt = require('./hook-events.js').read_recent({ root: project_dir, host: 'codex' })[0];
+  node_assert.equal(receipt.state, 'failed');
+  node_assert.equal(receipt.outcome, 'stop_retry_report_failed');
+});
+
+node_test.test('records a valid response after the single Stop correction retry', () => {
+  const project_dir = make_project('# → Ask / A-001\n\n+ Finish the requested work.\n');
+  const result = run_hook(project_dir, {
+    hook_event_name: 'Stop',
+    stop_hook_active: true,
+    session_id: 'retry-session',
+    turn_id: 'retry-turn',
+    last_assistant_message: active_stop_report
+  });
+
+  node_assert.strictEqual(result.code, 0, result.stderr);
+  const receipt = require('./hook-events.js').read_recent({ root: project_dir, host: 'codex' })[0];
+  node_assert.equal(receipt.outcome, 'stop_retry_passed');
+});
+
+node_test.test('retains the host-neutral legacy retry escape', () => {
   const project_dir = make_project(round_ending_in_scaffold('## nothing useful here', taipei_stamp()));
-  const result = run_hook(project_dir, { stop_hook_active: true });
+  const result = run_hook(project_dir, { stop_hook_active: true }, null);
 
   node_assert.strictEqual(result.code, 0);
 });
@@ -520,20 +682,52 @@ const tool_result = () => ({ type: 'user', message: { role: 'user', content: [{ 
 const devlog_edit = () => ({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', name: 'Edit', input: { file_path: '/x/devlog.md' } }] } });
 const assistant_text = text => ({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] } });
 
-node_test.test('exits 0 when a round turn printed exactly the one-line terminal output', () => {
+node_test.test('checks active-stop transcript fallback without a devlog edit record', () => {
+  const project_dir = make_project('# → Ask / A-001\n\n+ Finish the requested work.\n');
+  const transcript_path = write_transcript(project_dir, [
+    owner_prompt('continue the open task'),
+    assistant_text(active_stop_report)
+  ]);
+  const result = run_hook(project_dir, { hook_event_name: 'Stop', stop_hook_active: false, transcript_path, last_assistant_message: null });
+
+  node_assert.strictEqual(result.code, 0, result.stderr);
+});
+
+node_test.test('prefers last_assistant_message over transcript parsing', () => {
+  const project_dir = make_project('# → Ask / A-001\n\n+ Finish the requested work.\n');
+  const transcript_path = write_transcript(project_dir, [
+    owner_prompt('continue the open task'),
+    assistant_text('Done.')
+  ]);
+  const result = run_hook(project_dir, {
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    transcript_path,
+    last_assistant_message: active_stop_report
+  });
+
+  node_assert.strictEqual(result.code, 0, result.stderr);
+});
+
+node_test.test('exits 0 when a round turn printed the saved stop summary and update path', () => {
   const project_dir = make_project(round_ending_in_scaffold(valid_reply_body, taipei_stamp()));
+  const summary = require('./round-linter').reply_summary_text(valid_reply_body);
   const transcript_path = write_transcript(project_dir, [
     owner_prompt('godev'),
     devlog_edit(),
     tool_result(),
-    assistant_text('devlog.md updated')
+    assistant_text(`${summary}\n\ndevlog.md updated`)
   ]);
-  const result = run_hook(project_dir, { stop_hook_active: false, transcript_path });
+  const result = run_hook(project_dir, {
+    stop_hook_active: false,
+    transcript_path,
+    last_assistant_message: `${summary}\n\ndevlog.md updated`
+  });
 
   node_assert.strictEqual(result.code, 0);
 });
 
-node_test.test('allows extra terminal lines as a warning (F-004)', () => {
+node_test.test('blocks default closeout output that omits the saved summary', () => {
   const project_dir = make_project(round_ending_in_scaffold(valid_reply_body, taipei_stamp()));
   const transcript_path = write_transcript(project_dir, [
     owner_prompt('godev'),
@@ -543,11 +737,11 @@ node_test.test('allows extra terminal lines as a warning (F-004)', () => {
   ]);
   const result = run_hook(project_dir, { stop_hook_active: false, transcript_path });
 
-  node_assert.strictEqual(result.code, 0);
-  node_assert.strictEqual(result.stderr, '');
+  node_assert.strictEqual(result.code, 2);
+  node_assert.match(result.stderr, /terminal_one_line/);
 });
 
-node_test.test('does not block when a round turn printed a line not ending in " updated"', () => {
+node_test.test('blocks default closeout output that omits the summary and update path', () => {
   const project_dir = make_project(round_ending_in_scaffold(valid_reply_body, taipei_stamp()));
   const transcript_path = write_transcript(project_dir, [
     owner_prompt('godev'),
@@ -557,8 +751,8 @@ node_test.test('does not block when a round turn printed a line not ending in " 
   ]);
   const result = run_hook(project_dir, { stop_hook_active: false, transcript_path });
 
-  node_assert.strictEqual(result.code, 0);
-  node_assert.equal(result.stderr, '');
+  node_assert.strictEqual(result.code, 2);
+  node_assert.match(result.stderr, /terminal_one_line/);
 });
 
 // The load-bearing guard: a plain-chat turn (no devlog edit) with multi-line
@@ -569,7 +763,11 @@ node_test.test('exits 0 for a plain-chat turn that did not write a round', () =>
     owner_prompt('what does gather_push do?'),
     assistant_text('It reads whether HEAD is fully pushed.\nRemote first, then upstream, then unpushed count.')
   ]);
-  const result = run_hook(project_dir, { stop_hook_active: false, transcript_path });
+  const result = run_hook(project_dir, {
+    stop_hook_active: false,
+    transcript_path,
+    last_assistant_message: 'It reads whether HEAD is fully pushed. Remote first, then upstream, then unpushed count.'
+  });
 
   node_assert.strictEqual(result.code, 0);
 });
@@ -692,7 +890,7 @@ node_test.test('cosmetic tracker and scope wording survives collection and both 
   const tracker = node_path.join(fixture.work_root, 'tracker.md');
   node_fs.writeFileSync(tracker, node_fs.readFileSync(tracker, 'utf8').replaceAll('**', '').replaceAll('- ', '+ '));
   const notebook = node_path.join(fixture.project_dir, '.agentflow/devlog.md');
-  const text = node_fs.readFileSync(notebook, 'utf8').replace('+ verify the checkpoint', '+ verify the checkpoint\n\n+ skip-review: fixture owner requests host review only').replace('**Scope check:**', '**Tracker and scope:**') + '\n# ← Reply / A-002\n\n### Summary\n\nThe checkpoint was verified.\n\n### Final report\n\nCurrent evidence is recorded.\n\n* **Host review:** PASS - inspected the fixture and evidence; no blocking findings.\n\n### Questions\n\n- None.\n\n---\n\n# → Ask / A-003\n\n+\n';
+  const text = node_fs.readFileSync(notebook, 'utf8').replace('+ verify the checkpoint', '+ verify the checkpoint\n\n+ skip-review: fixture owner requests host review only').replace('**Scope check:**', '**Tracker and scope:**') + '\n# ← Reply / A-002\n\n### Summary\n\n- **Status:** complete\n- **Result:** the checkpoint was verified; current evidence is recorded.\n- **Owner action:** none\n- **Next step:** no further action is needed\n\n### Final report\n\nCurrent evidence is recorded.\n\n* **Host review:** PASS - inspected the fixture and evidence; no blocking findings.\n\n### Questions\n\n- None.\n\n---\n\n# → Ask / A-003\n\n+\n';
   node_fs.writeFileSync(notebook, text);
   const facts = require('./completion-context.js').collect({ project_root: fixture.project_dir, notebook_path: '.agentflow/devlog.md', devlog_text: text, active_host: 'codex' });
   node_assert.equal(facts.tracker.path, 'artifacts/A-002-checkpoint/tracker.md');

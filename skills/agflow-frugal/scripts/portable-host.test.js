@@ -88,7 +88,7 @@ for (const git_mode of [true, false]) test(`generic host retains explicit sessio
 		assert.equal(first_output.host_family, 'example-family')
 		assert.equal(first_output.hooks.status, 'not_available')
 		assert.match(first_output.hooks.instructions.capture, /append-input/)
-		assert.match(first_output.hooks.instructions.closeout, /agf close/)
+		assert.match(first_output.hooks.instructions.closeout, /agf\.js close/)
 		assert.equal(fs.existsSync(path.join(root, '.codex')), false)
 		assert.equal(fs.existsSync(path.join(root, '.claude')), false)
 		assert.equal(fs.existsSync(path.join(root, '.example-agent')), false)
@@ -112,7 +112,7 @@ for (const git_mode of [true, false]) test(`generic host retains explicit sessio
 			notebook: notebook_path,
 			ask: 'A-001',
 			run_events: ['- Generic portable lifecycle checks passed.\n'],
-			reply: '## Summary\n\n- Generic startup and manual capture completed.\n\n## Final report\n\n- Closeout was verified in a portable host fixture.\n\n```completion-metadata\nHost review: PASS — inspected the fixture change and lifecycle evidence; independent review was unavailable.\n```\n',
+			reply: '## [SUMMARY]\n\n- Status: complete.\n- Result: generic startup, manual capture, and closeout passed in the portable host fixture.\n- Owner action: none.\n- Next step: no further action is needed.\n\n## [FINAL REPORT]\n\n1. Verify generic-host startup and manual capture\n\n   - Succeeded; closeout preserved the unrelated owner file.\n\n```completion-metadata\nHost review: PASS — inspected the fixture and lifecycle evidence; independent review was unavailable.\n```\n\n## Questions (batched — each with a suggested default)\n\n- None.\n',
 			status: { project: 'portable host', notebook: notebook_path, notebook_kind: 'root', current_commit: 'pending', tests_scenarios: 'portable host journey', config_path: 'ag.json', host: 'example-agent', validation: 'validated', proven: 'portable lifecycle', open: 'none', next: 'await owner', artifacts: 'none', archived_eras: 'none', streams: [] },
 			allowed_paths: [notebook_path, '.gitignore', 'ag.json'],
 			commit_message: 'record portable host lifecycle',

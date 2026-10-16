@@ -155,7 +155,7 @@ const content_blocks = entry => {
 const is_owner_prompt = entry =>
   entry && entry.type === 'user' && !content_blocks(entry).some(block => block && block.type === 'tool_result');
 
-const gather_terminal_output = transcript_path => {
+const gather_terminal_output = (transcript_path, require_devlog_edit = true) => {
   if (!transcript_path) return undefined;
   const entries = read_transcript_entries(transcript_path);
   if (entries.length === 0) return undefined;
@@ -178,7 +178,7 @@ const gather_terminal_output = transcript_path => {
       block.input &&
       typeof block.input.file_path === 'string' &&
       devlog_file_pattern.test(block.input.file_path)));
-  if (!devlog_edited) return undefined;
+  if (require_devlog_edit && !devlog_edited) return undefined;
 
   const last_assistant = [...turn].reverse().find(entry => entry.type === 'assistant');
   if (!last_assistant) return undefined;
@@ -446,6 +446,8 @@ const collect = ({
   active_host,
   devlog_text,
   transcript_path,
+  last_assistant_message,
+  stop_event,
   terminal_output,
   require_status_projection,
   now_ms = Date.now(),
@@ -465,7 +467,19 @@ const collect = ({
   const repository = require('./repository-state').detect(root);
   const record = tracker_facts(root, current_round, ask_id, notebook_path, workspace_dir, repository);
   const push = gather_push(root);
-  const status_output = terminal_output !== undefined ? terminal_output : gather_terminal_output(transcript_path);
+  const active_stop = stop_event === true && current_round !== undefined && current_round.ask_text.trim() !== '' && current_round.reply_text.trim() === '';
+  const direct_output = typeof last_assistant_message === 'string' && last_assistant_message.trim().length > 0
+    ? last_assistant_message
+    : undefined;
+  const transcript_output = active_stop && direct_output !== undefined
+    ? undefined
+    : gather_terminal_output(transcript_path, !active_stop);
+  const direct_output_is_relevant = active_stop || transcript_output !== undefined;
+  const status_output = terminal_output !== undefined
+    ? terminal_output
+    : direct_output_is_relevant && direct_output !== undefined
+      ? direct_output
+      : transcript_output;
   const git_status = git(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all']);
   const scope = require('./notebook-write.js').read_input_scope(root, notebook_path, active_host, ask_id);
   const ignored = new Set([...ignore_paths, ...(scope?.ignored_paths || []), ...(scope ? [scope.file] : [])]
@@ -515,6 +529,7 @@ const collect = ({
     notebook_path,
     config_path: node_fs.existsSync(config_file) ? config_file : undefined,
     active_host,
+    stop_event,
     require_status_projection,
     now_ms,
     push,

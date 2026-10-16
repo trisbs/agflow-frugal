@@ -14,7 +14,7 @@ const { execFileSync } = require('node:child_process');
 
 const script = node_path.join(__dirname, 'install-hook.js');
 
-const run = (cwd, args) => execFileSync('node', [script, ...args], { cwd, encoding: 'utf8' });
+const run = (cwd, args, env = process.env) => execFileSync('node', [script, ...args], { cwd, env, encoding: 'utf8' });
 
 const fresh_dir = () => node_fs.mkdtempSync(node_path.join(node_os.tmpdir(), 'agentflow-hook-'));
 
@@ -117,6 +117,77 @@ test('--host codex touches only the codex config', () => {
 
   assert.ok(has_our_stop_hook(read_json(node_path.join(dir, '.codex', 'hooks.json'))));
   assert.ok(!node_fs.existsSync(node_path.join(dir, '.claude', 'settings.json')));
+});
+
+test('verify reports missing hooks and an explicit installation command without writing config', () => {
+  const dir = fresh_dir();
+  const result = require('./install-hook.js').verify({ cwd: dir, hosts: ['codex'], scope: 'project' });
+  assert.equal(result.status, 'missing');
+  assert.equal(result.config_path, node_path.join(dir, '.codex', 'hooks.json'));
+  assert.deepEqual(result.missing_events, ['Stop', 'UserPromptSubmit']);
+  assert.match(result.message, /agf hooks --project --host codex/u);
+  assert.equal(node_fs.existsSync(result.config_path), false, 'verification must not write host configuration');
+});
+
+test('verify respects installation scope and reports malformed config without modifying it', () => {
+  const dir = fresh_dir();
+  run(dir, ['--project', '--host', 'codex', '--quiet']);
+  assert.equal(require('./install-hook.js').verify({ cwd: dir, hosts: ['codex'], scope: 'project' }).status, 'available');
+  assert.equal(require('./install-hook.js').verify({ cwd: dir, hosts: ['codex'], scope: 'global' }).status, 'missing');
+  const file = node_path.join(dir, '.codex', 'hooks.json');
+  node_fs.writeFileSync(file, '{broken');
+  const invalid = require('./install-hook.js').verify({ cwd: dir, hosts: ['codex'], scope: 'project' });
+  assert.equal(invalid.status, 'missing');
+  assert.equal(invalid.reason, 'invalid_config');
+  assert.equal(node_fs.readFileSync(file, 'utf8'), '{broken');
+});
+
+test('global install and verification use only the disposable home config', () => {
+  const home = fresh_dir();
+  const cwd = fresh_dir();
+  const env = { ...process.env, HOME: home, USERPROFILE: home };
+  run(cwd, ['--global', '--host', 'codex', '--quiet'], env);
+  const global_path = node_path.join(home, '.codex', 'hooks.json');
+  assert.ok(has_our_stop_hook(read_json(global_path)));
+  assert.equal(node_fs.existsSync(node_path.join(cwd, '.codex', 'hooks.json')), false);
+  assert.equal(require('./install-hook.js').verify({ cwd, home, hosts: ['codex'], scope: 'global' }).config_path, global_path);
+  assert.equal(require('./install-hook.js').verify({ cwd, home, hosts: ['codex'], scope: 'global' }).status, 'available');
+});
+
+test('scope detection distinguishes global installs, project boundaries, and unrelated folders', () => {
+  const root = fresh_dir();
+  const home = fresh_dir();
+  const project_skill = node_path.join(root, '.agents', 'skills', 'agflow-frugal');
+  const global_skill = node_path.join(home, '.agents', 'skills', 'agflow-frugal');
+  const detect = require('./install-hook.js').scope_for_skill;
+  assert.equal(detect({ skill_dir: project_skill, cwd: node_path.join(root, 'nested'), home }).scope, 'project');
+  assert.equal(detect({ skill_dir: project_skill, cwd: fresh_dir(), home }).scope, 'outside_project');
+  assert.equal(detect({ skill_dir: global_skill, cwd: fresh_dir(), home }).scope, 'global');
+});
+
+test('project scope includes linked worktrees of the installed project only', () => {
+  const root = fresh_dir();
+  const foreign = fresh_dir();
+  const home = fresh_dir();
+  const project_skill = node_path.join(root, '.agents', 'skills', 'agflow-frugal');
+  const detect = require('./install-hook.js').scope_for_skill;
+  const git = (cwd, args) => require('node:child_process').execFileSync('git', args, { cwd, stdio: 'ignore' });
+  for (const dir of [root, foreign]) {
+    git(dir, ['init', '-q', '-b', 'main']);
+    git(dir, ['config', 'user.email', 'scope@example.invalid']);
+    git(dir, ['config', 'user.name', 'Scope test']);
+    node_fs.writeFileSync(node_path.join(dir, 'tracked.txt'), 'scope test\n');
+    git(dir, ['add', 'tracked.txt']);
+    git(dir, ['commit', '-q', '-m', 'initial']);
+  }
+  const linked = node_path.join(root, 'linked-worktree');
+  git(root, ['worktree', 'add', '-q', '-b', 'stream', linked]);
+  try {
+    assert.equal(detect({ skill_dir: project_skill, cwd: linked, home }).scope, 'project');
+    assert.equal(detect({ skill_dir: project_skill, cwd: foreign, home }).scope, 'outside_project');
+  } finally {
+    require('node:child_process').execFileSync('git', ['worktree', 'remove', '--force', linked], { cwd: root, stdio: 'ignore' });
+  }
 });
 
 test('--off removes only the owned nested command and preserves siblings and entry metadata', () => {

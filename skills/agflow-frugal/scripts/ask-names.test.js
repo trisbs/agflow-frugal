@@ -21,7 +21,7 @@ const fixture = () => {
 };
 
 const status = () => ({ project: 'names', notebook: '.agentflow/devlog.md', notebook_kind: 'root', current_commit: 'none', tests_scenarios: 'names', config_path: 'ag.json', host: 'codex', validation: 'validated', proven: 'names', open: 'none', next: 'await owner', artifacts: 'none', archived_eras: 'none', streams: [] });
-const reply = '# ← Reply / A-001\n\n## [SUMMARY]\n\n- Done.\n\n## [FINAL REPORT]\n\n1. Done.\n\n```completion-metadata\nHost review: PASS — inspected disposable heading fixture.\n```\n\n## Questions (batched — each with a suggested default)\n\n- None.\n';
+const reply = '# ← Reply / A-001\n\n## [SUMMARY]\n\n- Status: complete.\n- Result: the requested close and reply operation completed.\n- Owner action: none.\n- Next step: none.\n\n## [FINAL REPORT]\n\n1. Done.\n\n```completion-metadata\nHost review: PASS — inspected disposable heading fixture.\n```\n\n## Questions (batched — each with a suggested default)\n\n- None.\n';
 
 test('ask-names initialization resolves the repository owner', () => {
   const f = fixture();

@@ -49,7 +49,7 @@ for (const git of [true, false]) test(`foreign startup and all progress writers 
   assert.deepEqual(state(root), before);
   for (const operation of ['append-input', 'append-run', 'append-wip', 'append-reply', 'close-round']) {
     const args = [operation, '--notebook', notebook, '--host', 'codex', '--ask', 'A-001', '--input-stdin'];
-    const reply = '# ← Reply / A-001\n\n## [SUMMARY]\n\n- Foreign writer.\n\n## [FINAL REPORT]\n\n1. Done.\n\n## Questions (batched — each with a suggested default)\n\n- None.\n';
+    const reply = '# ← Reply / A-001\n\n## [SUMMARY]\n\n- Status: complete.\n- Result: foreign writer fixture.\n- Owner action: none.\n- Next step: no further action is needed.\n\n## [FINAL REPORT]\n\n1. Done.\n\n## Questions (batched — each with a suggested default)\n\n- None.\n';
     const input = operation === 'close-round' ? JSON.stringify({ ask: 'A-001', run_events: [], reply, status: {} }) : operation === 'append-reply' ? reply : '- foreign writer\n';
     const result = command(root, 'notebook-write.js', args, input, 'B');
     assert.notEqual(result.status, 0, operation);
@@ -70,13 +70,19 @@ for (const git of [true, false]) test(`foreign startup and all progress writers 
 test('Codex godev startup automatically inherits an active Ask and records the handoff', () => {
   const root = fixture(false);
   const owner = require('./notebook-owner');
+  const notebook_before = read(root);
+  const state_without_event_receipts = snapshot => Object.fromEntries(Object.entries(snapshot).filter(([file]) => !file.startsWith('.agentflow/.tmp/hook-events/')));
   const hook_before = state(root);
   const hook = command(root, 'stop-hook.js', ['--host', 'codex'], JSON.stringify({
     cwd: root, hook_event_name: 'UserPromptSubmit', session_id: ids.B, turn_id: 'continue-1', prompt: 'godev continue the current task',
   }), 'B');
   assert.equal(hook.status, 0, hook.stderr);
   assert.match(JSON.parse(hook.stdout).hookSpecificOutput.additionalContext, /normal `agf start` workflow.*atomically inherit.*No separate authentication prompt/u);
-  assert.deepEqual(state(root), hook_before, 'the prompt hook must not transfer ownership itself');
+  assert.equal(read(root), notebook_before, 'the prompt hook must not change the notebook');
+  assert.deepEqual(state_without_event_receipts(state(root)), state_without_event_receipts(hook_before));
+  const handoff_receipts = require('./hook-events').read_recent({ root, host: 'codex' });
+  assert.equal(handoff_receipts[0]?.outcome, 'capture_owner_conflict');
+  assert.equal(JSON.stringify(handoff_receipts).includes('godev continue the current task'), false);
 
   const continuation = start(root, 'B', 'godev continue the current task');
   assert.equal(continuation.status, 0, continuation.stderr);
@@ -205,13 +211,19 @@ test('concurrent owner transfers using one inspected token accept only one claim
   assert.equal(after.owner.handoffs.length, 1);
 });
 
-test('foreign prompt reaches the agent without startup or receipt mutation', () => {
+test('foreign prompt reaches the agent without changing the notebook and records a bounded receipt', () => {
   const root = fixture(false);
   const before = state(root);
+  const notebook_before = read(root);
   const result = command(root, 'stop-hook.js', ['--host', 'codex'], JSON.stringify({ cwd: root, hook_event_name: 'UserPromptSubmit', session_id: ids.B, turn_id: 'one', prompt: 'foreign hook' }), 'B');
   assert.equal(result.status, 0);
   assert.match(JSON.parse(result.stdout).hookSpecificOutput.additionalContext, /not saved.*ownership/u);
-  assert.deepEqual(state(root), before);
+  assert.equal(read(root), notebook_before, 'the foreign prompt hook must not change the notebook');
+  const state_without_event_receipts = snapshot => Object.fromEntries(Object.entries(snapshot).filter(([file]) => !file.startsWith('.agentflow/.tmp/hook-events/')));
+  assert.deepEqual(state_without_event_receipts(state(root)), state_without_event_receipts(before));
+  const receipts = require('./hook-events').read_recent({ root, host: 'codex' });
+  assert.equal(receipts[0]?.outcome, 'capture_owner_conflict');
+  assert.equal(JSON.stringify(receipts).includes('foreign hook'), false);
 });
 
 const raw_fixture = (body = '+\n') => {

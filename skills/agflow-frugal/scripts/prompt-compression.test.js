@@ -37,11 +37,13 @@ test('prompt trace supports persistent checkout-local mode and retires one-shot 
 	const skill = read('skills/agflow-frugal/SKILL.md')
 	const hook = read('skills/agflow-frugal/scripts/stop-hook.js')
 	const docs = read('skills/agflow-frugal/scripts/README.md')
-	assert.match(skill, /Trace toggles are Codex `UserPromptSubmit` controls, not startup tasks/u)
-	assert.match(skill, /clean folders need the global hook.*Without a hook acknowledgement, report that setup step instead of running `godev` startup/u)
+	assert.match(skill, /Codex `UserPromptSubmit` handles trace controls, not startup/u)
+	assert.match(skill, /A loaded hook is required; clean folders need the global hook.*Without its acknowledgement, report setup instead of starting `godev`/u)
 	assert.match(skill, /Bare `godev trace\[ full\]` is retired/u)
 	assert.match(skill, /40–70 tokens\/prompt/u)
 	assert.match(skill, /unknown explicit/u)
+	assert.match(skill, /Trace state is checkout-local .*enable sets it on; disable sets it off.*later prompts follow saved state.*While saved state is on, show .*when off, omit the line/u)
+	assert.match(skill, /Keep the last successful toggle for this session; it overrides old trace rules/u)
 	assert.match(hook, /\.agentflow', '\.tmp', 'trace-mode\.json'/u)
 	assert.match(hook, /ONE-SHOT RETIRED/u)
 	assert.match(hook, /!persistent\) return \{\}/u)
@@ -82,11 +84,12 @@ test('project authorization overrides the global diff-approval rule and names th
 		assert.match(project_policy, /push.*release.*paid.*installed/isu)
 	}
 	assert.match(skill, /Exception: `\/home\/tristan\/\.codex\/AGENTS\.md` § `Code Change Approval`/i)
-	assert.match(skill, /Show L0–L5\/model\/status\/count with plain keys, bold values, unknown explicit/u)
 	const task_path = path.join(root, 'Task.md')
 	if (fs.existsSync(task_path)) {
 		const task = read('Task.md')
 		if (/TASK CLASS:/u.test(task)) {
+			assert.match(task, /Only when trace is enabled, the visible run status/)
+			assert.match(task, /only when trace is enabled, display `TASK CLASS:/)
 			assert.match(task, /TASK CLASS: \*\*L3 — Basic Direct\*\*.*CURRENT MODEL: \*\*.*WORKER MODEL\/STATUS: \*\*.*WORKERS STARTED:/s)
 		}
 	}
@@ -94,9 +97,8 @@ test('project authorization overrides the global diff-approval rule and names th
 
 test('the always-loaded skill routes advanced machinery on demand', () => {
 	const skill = read('skills/agflow-frugal/SKILL.md') + '\n' + read('skills/agflow-frugal/references/closeout.md')
-	assert.match(skill, /canonical startup command.*agf\.js start.*message-stdin/i)
-	assert.match(skill, /first and only startup call.*exact owner message.*standard input/is)
-	assert.match(skill, /Never make an empty or probe startup call/is)
+	assert.match(skill, /first startup call uses this command.*exact owner message on stdin.*agf\.js start.*message-stdin/is)
+	assert.match(skill, /Never use an empty or probe startup call/is)
 	assert.match(skill, /references\/streams\.md.*before any feature/i)
 	assert.match(skill, /references\/ag\.md.*all-in.*make-plans/i)
 	assert.match(skill, /references\/delegation\.md.*before selecting, briefing, or starting a worker/i)
@@ -104,9 +106,17 @@ test('the always-loaded skill routes advanced machinery on demand', () => {
 	assert.doesNotMatch(skill, /eval\/evaluation-harness\.md/i)
 })
 
+test('the front door recovers from a related missing Agentflow command without broad environment scans', () => {
+	const skill = read('skills/agflow-frugal/SKILL.md')
+	assert.match(skill, /tool reports `agf` not found.*direct `node .*agf\.js start/is)
+	assert.match(skill, /do not retry it.*non-interactive zsh does not load `~\/\.zshrc`/is)
+	assert.match(skill, /related command-not-found.*check only that command and the capability it needs/is)
+	assert.match(skill, /unrelated failures do not trigger environment scans/is)
+})
+
 test('the slim front door retains the owner, scope, evidence, and Git boundaries', () => {
 	const skill = read('skills/agflow-frugal/SKILL.md') + '\n' + read('skills/agflow-frugal/references/closeout.md')
-	assert.match(skill, /exact owner message.*standard input/i)
+	assert.match(skill, /exact owner message on stdin/i)
 	assert.match(skill, /Scope discipline — implement exactly the ask/i)
 	assert.match(skill, /Worker findings never expand scope/i)
 	assert.match(skill, /Facts require direct command output or file inspection/i)
@@ -116,8 +126,16 @@ test('the slim front door retains the owner, scope, evidence, and Git boundaries
 
 test('every workflow stop explains status, cause, owner action, and next step', () => {
 	const skill = read('skills/agflow-frugal/SKILL.md') + '\n' + read('skills/agflow-frugal/references/closeout.md')
-	assert.match(skill, /At every stop, state completion, result, cause, exact owner action and next step; name what approval unlocks/i)
 	assert.match(skill, /If a gate prevents completion, say plainly that the task is incomplete; distinguish an error \(and its effect\) from approval, missing input, unavailable capability, or a pending check.*exact owner action or approval needed.*what happens next/is)
+	assert.match(skill, /At every stop, answer the owner first; state \*\*Status\*\*, \*\*Result\*\*, \*\*Owner action\*\*, and \*\*Next step\*\*.*\*\*Cause\*\* if incomplete/i)
+	assert.match(skill, /exact copyable command.*working directory.*prerequisites.*effect.*exact approval response.*what it unlocks/i)
+	assert.match(skill, /Say “none” if no action is needed; never invent a command/i)
+	assert.match(skill, /hide checker feedback/i)
+	assert.match(skill, /Stop-hook format failures are silent and non-blocking.*hosts surface blocks as feedback/is)
+	assert.match(skill, /completed SUMMARY must state Status, Result, Owner action, and Next step.*incomplete, blocked, or waiting SUMMARY must also state Cause/i)
+	assert.match(skill, /malformed report formatting is recorded silently and never returned as a blocking correction because the host surfaces blocking reasons as feedback/i)
+	assert.match(skill, /On an open Ask, the Stop hook checks the live response supplied by the host/i)
+	assert.match(skill, /On closeout, a visible reply that omits or changes the saved SUMMARY remains blocking/i)
 	assert.match(skill, /Never imply completion while acceptance work remains/i)
 })
 
@@ -133,6 +151,24 @@ test('show-diff requires justified, human-scannable unified diff hunks', () => {
 test('general writing guidance preserves requirements refresh history outside advisor-only paths', () => {
 	const writing = read('skills/agflow-frugal/references/writing.md')
 	assert.match(writing, /requirements refreshes.*append-only question history.*(?:one|single) replaceable `# Final requirements summary`/i)
+})
+
+test('design review briefs map requirements and expose key differences', () => {
+	const writing = read('skills/agflow-frugal/references/writing.md')
+	assert.match(writing, /Before requesting `Design Go`.*concise `## Review brief`.*link the full `design\.md`/is)
+	assert.match(writing, /Requirement coverage.*owner-stated requirement.*planned action.*acceptance proof/is)
+	assert.match(writing, /Key differences.*request or current behavior.*effects/is)
+	assert.match(writing, /Approval effect.*exact work `Design Go` authorizes/is)
+	assert.match(writing, /do not create a separate review artifact/i)
+})
+
+test('implementation closeout checks every requested outcome against the delivered result and proof', () => {
+	const writing = read('skills/agflow-frugal/references/writing.md')
+	assert.match(writing, /When source, test, or skill-instruction files change, include exactly one `### Outcome coverage` table/is)
+	assert.match(writing, /`Requested outcome`, `Delivered result`, `Evidence`, and `Status` columns/is)
+	assert.match(writing, /host checks that its claims are true/is)
+	assert.match(writing, /use `Not proven` for unmet or uncertain outcomes and keep the task open/is)
+	assert.match(writing, /add no model call, reviewer, or separate artifact/i)
 })
 
 test('the front door makes activation and closeout one-shot operations', () => {

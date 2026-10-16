@@ -329,14 +329,112 @@ const lock_wait_ms = () => {
 const acquire_lock = lock_path => {
   const started = Date.now();
   while (true) {
+    let descriptor;
     try {
-      return node_fs.openSync(lock_path, node_fs.constants.O_CREAT | node_fs.constants.O_EXCL | node_fs.constants.O_WRONLY, 0o600);
+      descriptor = node_fs.openSync(lock_path, node_fs.constants.O_CREAT | node_fs.constants.O_EXCL | node_fs.constants.O_WRONLY, 0o600);
+      const header = { type: 'agentflow_notebook_writer_lock', version: 1, pid: process.pid, started_at: format_local_timestamp(), token: node_crypto.randomBytes(16).toString('hex') };
+      node_fs.writeFileSync(descriptor, `${JSON.stringify(header)}\n`, 'utf8');
+      node_fs.fsyncSync(descriptor);
+      return descriptor;
     } catch (error) {
+      if (descriptor !== undefined) {
+        let opened = null;
+        try { opened = node_fs.fstatSync(descriptor); } catch {}
+        try { node_fs.closeSync(descriptor); } catch {}
+        if (opened !== null) {
+          try {
+            const current = node_fs.lstatSync(lock_path);
+            if (current.isFile() && String(current.dev) === String(opened.dev) && String(current.ino) === String(opened.ino)) node_fs.unlinkSync(lock_path);
+          } catch {}
+        }
+      }
       if (error.code !== 'EEXIST') throw error;
       if (Date.now() - started >= lock_wait_ms()) fail('another notebook writer is still active');
       if (typeof Atomics.wait === 'function') Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, LOCK_POLL_MS);
     }
   }
+};
+
+const recover_close_round_lock = (lock_path, expected_pid) => {
+  if (!Number.isSafeInteger(expected_pid) || expected_pid <= 0) return { recovered: false, path: lock_path, detail: 'interrupted startup owner PID is unavailable' };
+  try { process.kill(expected_pid, 0); return { recovered: false, path: lock_path, detail: `notebook-writer lock PID ${expected_pid} is still present` } }
+  catch (error) {
+    if (error.code !== 'ESRCH') return { recovered: false, path: lock_path, detail: `notebook-writer lock PID ${expected_pid} state is unknown` };
+  }
+  let initial;
+  let text;
+  let record;
+  try {
+    initial = node_fs.lstatSync(lock_path);
+    if (!initial.isFile() || initial.isSymbolicLink()) return { recovered: false, path: lock_path, detail: 'notebook-writer lock is not a regular file' };
+    text = node_fs.readFileSync(lock_path, 'utf8');
+    try { record = JSON.parse(text) } catch {}
+  } catch (error) {
+    if (error.code === 'ENOENT') return { recovered: true, path: lock_path };
+    return { recovered: false, path: lock_path, detail: `notebook-writer lock could not be read: ${error.message}` };
+  }
+  if (record?.type !== 'agentflow_notebook_writer_lock' || record.version !== 1 || record.pid !== expected_pid || !/^[a-f0-9]{32}$/u.test(record.token)) {
+    return { recovered: false, path: lock_path, detail: 'notebook-writer lock does not identify the interrupted startup owner; left it in place' };
+  }
+  try {
+    const current = node_fs.lstatSync(lock_path);
+    if (!current.isFile() || current.isSymbolicLink() || !same_object(initial, current) || node_fs.readFileSync(lock_path, 'utf8') !== text) {
+      return { recovered: false, path: lock_path, detail: 'notebook-writer lock changed during interrupted-start recovery; left it in place' };
+    }
+    node_fs.unlinkSync(lock_path);
+    return { recovered: true, path: lock_path, pid: expected_pid };
+  } catch (error) {
+    return { recovered: false, path: lock_path, detail: `interrupted-start notebook-writer lock could not be removed: ${error.message}` };
+  }
+};
+
+const recover_startup_artifacts = ({ root, notebook_path, config_path, startup_pid }) => {
+  const notebook_lock = recover_close_round_lock(`${notebook_path}.close-round.lock`, startup_pid);
+  if (!notebook_lock.recovered) return notebook_lock;
+  const cleaned = [];
+  for (const target of [...new Set([notebook_path, config_path].filter(Boolean).map(file => node_path.resolve(file)))]) {
+    const directory = node_path.dirname(target);
+    const relative_directory = node_path.relative(root, directory);
+    if (relative_directory.startsWith(`..${node_path.sep}`) || relative_directory === '..' || node_path.isAbsolute(relative_directory)) {
+      return { recovered: false, path: directory, detail: 'startup temporary-file directory resolves outside the repository' };
+    }
+    try {
+      const real_directory = node_fs.realpathSync(directory);
+      if (node_path.resolve(real_directory) !== node_path.resolve(directory)) {
+        return { recovered: false, path: directory, detail: 'startup temporary-file directory contains a symbolic link' };
+      }
+    } catch (error) {
+      if (error.code === 'ENOENT') continue;
+      return { recovered: false, path: directory, detail: `startup temporary-file directory could not be verified: ${error.message}` };
+    }
+    const basename = node_path.basename(target).replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+    const patterns = [
+      new RegExp(`^${basename}\\.${startup_pid}\\.\\d+\\.[a-f0-9]{16}\\.tmp$`, 'u'),
+      new RegExp(`^${basename}\\.tmp-${startup_pid}-\\d+-\\d+$`, 'u'),
+    ];
+    let entries;
+    try { entries = node_fs.readdirSync(directory); }
+    catch (error) {
+      if (error.code === 'ENOENT') continue;
+      return { recovered: false, path: directory, detail: `startup temporary files could not be listed: ${error.message}` };
+    }
+    for (const name of entries) {
+      if (!patterns.some(pattern => pattern.test(name))) continue;
+      const temporary = node_path.join(directory, name);
+      try {
+        const initial = node_fs.lstatSync(temporary);
+        if (!initial.isFile() || initial.isSymbolicLink()) return { recovered: false, path: temporary, detail: 'startup temporary file is not a regular file; left it in place' };
+        if (typeof process.getuid === 'function' && initial.uid !== process.getuid()) return { recovered: false, path: temporary, detail: 'startup temporary file is owned by another user; left it in place' };
+        const current = node_fs.lstatSync(temporary);
+        if (!same_object(initial, current) || !current.isFile() || current.isSymbolicLink()) return { recovered: false, path: temporary, detail: 'startup temporary file changed during recovery; left it in place' };
+        node_fs.unlinkSync(temporary);
+        cleaned.push(temporary);
+      } catch (error) {
+        if (error.code !== 'ENOENT') return { recovered: false, path: temporary, detail: `startup temporary file could not be removed: ${error.message}` };
+      }
+    }
+  }
+  return { recovered: true, path: notebook_lock.path, pid: startup_pid, cleaned };
 };
 
 const acquire_close_round_lock = lock_path => {
@@ -358,13 +456,24 @@ const release_close_round_lock = lock => {
   }
 };
 
-const close_status_text = (status, notebook_text) => {
+const close_status_text = (status, notebook_text, root) => {
   if (status === null || typeof status !== 'object' || Array.isArray(status)) fail('close-round STATUS must be a fields object');
   const unsupported = Object.keys(status).filter(name => !close_round_status_fields.includes(name));
   if (unsupported.length) fail(`close-round STATUS has unsupported fields: ${unsupported.join(', ')}`);
   const missing = close_round_status_fields.filter(name => status[name] === undefined);
   if (missing.length > 0) fail(`close-round STATUS is missing ${missing.join(', ')}`);
   const options = Object.fromEntries(close_round_status_fields.map(name => [name, status[name]]));
+  if (root && options.notebook_kind === 'root' && Array.isArray(options.streams) && options.streams.some(stream => stream && stream.state === 'active')) {
+    try {
+      const config_path = ag_settings.active_config_path(root, options.notebook);
+      const config = ag_settings.read_json_config(config_path, { repo_root: root, active_host: options.host, persist_migration: false });
+      options.streams = require('./stream-status.js').canonicalize_root_streams({
+        repo: root, features: ag_settings.workspace_paths(config).features, streams: options.streams,
+      }).streams;
+    } catch (error) {
+      fail(`root STATUS streams are invalid: ${error.message}`);
+    }
+  }
   const generated = ag_settings.format_status(options);
   return generated.replace(/\r\n?/gu, line_ending_for(Buffer.from(notebook_text)));
 };
@@ -388,7 +497,7 @@ const parse_close_document = (document, notebook_text, ask, root, host) => {
   return {
     runs,
     reply: render_reply(document.reply, ask, root, host || document.host || document.status?.host),
-    status: close_status_text(document.status, notebook_text),
+    status: close_status_text(document.status, notebook_text, root),
   };
 };
 
@@ -515,7 +624,7 @@ const match_closed_close = ({ notebook_text, input, project_root, notebook_path 
 
   let expected_status;
   try {
-    expected_status = close_status_text(document.status, notebook_text);
+    expected_status = close_status_text(document.status, notebook_text, project_root);
     const region = ag_settings.status_region(notebook_text);
     if (notebook_text.slice(0, region.body_end) !== expected_status) return null;
   } catch (error) {
@@ -1089,6 +1198,7 @@ const run = argv => {
 
 module.exports = {
   format_owner_input,
+  close_status_text,
   append_input,
   append_run,
   append_wip,
@@ -1107,6 +1217,8 @@ module.exports = {
   read_regular_file,
   acquire_close_round_lock,
   release_close_round_lock,
+  recover_close_round_lock,
+  recover_startup_artifacts,
   verify_notebook_unchanged,
   atomic_replace,
 };

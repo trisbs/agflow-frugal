@@ -2,10 +2,10 @@
 name: "agflow-frugal"
 description: "Fast file-logged work with Git evidence and on-demand development machinery. Triggered by godev/devlog/ag/agentflow/fast-lane."
 metadata:
-  version: "8.4.0"
+  version: "8.5.0"
 ---
 
-# Agentflow Frugal v8.4.0
+# Agentflow Frugal v8.5.0
 
 Agentflow Frugal is a compatibility-first fork based on upstream Agentflow v8.3.3.
 
@@ -23,7 +23,7 @@ Exception: `/home/tristan/.codex/AGENTS.md` § `Code Change Approval`; no approv
 
 ## Exact help fast path
 
-For an exact `godev help` or `/godev help` request, return this usage without starting intake, capturing an Ask, reading prior Answers, or closing a notebook round:
+For an exact `godev help` or `/godev help` request, return the usage supplied below without starting intake, capturing an Ask, reading prior Answers, or closing a notebook round:
 
 ```text
 Agentflow usage
@@ -45,31 +45,34 @@ Already-launched looper workers follow their supplied plan directly, not this ho
 
 1. The host supplies the complete Agentflow skill directory as `<active-agentflow-skill-dir>`. Read the skill from that path. If the host does not supply a complete path, stop with one clear message; never guess a home-directory installation or probe a shell function.
 
-2. The first and only startup call uses this canonical startup command with the exact owner message on standard input: `node <active-agentflow-skill-dir>/scripts/agf.js start --repo <repo> --host <safe-id> [--host-family <known-family>] --message-stdin --json`. Never make an empty or probe startup call; retry may see setup as foreign. Keep owner text outside shell syntax; close stdin. Never use a pseudo-terminal or `tty: true`. For shell tools, use a single-quoted heredoc: append `<<'AGF_INPUT'`, the exact message, and a bare `AGF_INPUT` line. Never wait for stdin or create an input file. An explicit safe ID takes precedence over inherited markers; missing or conflicting automatic identity requires an explicit safe ID, never a guess. — I-077.
+2. The first startup call uses this command with the exact owner message on stdin: `node <active-agentflow-skill-dir>/scripts/agf.js start --repo <repo> --host <safe-id> [--host-family <known-family>] --message-stdin --json`. Never use an empty or probe startup call. Keep owner text outside shell syntax; close stdin. Never use a pseudo-terminal or `tty: true`. For shell tools, use a single-quoted heredoc: append `<<'AGF_INPUT'`, the exact message, and a bare `AGF_INPUT` line. Never wait for stdin or create an input file. Explicit safe IDs override inherited markers; missing or conflicting identity needs an explicit safe ID, never a guess. — I-077.
+   Active lock: wait for its process, check the current Ask, and retry the same message only if absent. Dead structured locks recover from their saved baseline. Never delete unverified legacy locks or recovery guards; inspect them and the Ask, resolve the owner, then retry only if absent.
 
    Git is optional; `<repo>` is the working project folder. With `git.state: unavailable`, continue there; never require another path or run `git init`. Commits, pushes, worktrees, and Git evidence are inapplicable. Use local closeout with owner capture, validation, tests, and host review.
 
-   The portable core requires file and command tools plus enough session state to retain the notebook and resume a round. Generic hosts use a safe explicit host ID, a unique retained `--session <id>`, and optional known family, return `hooks: not_available`, and follow the manual capture and `agf close` instructions. Pass the same `--host <safe-id> --session <id>` to startup, capture, progress, compaction and close; `AGENTFLOW_SESSION_ID` is an equivalent command-scoped source. Independent sessions must use different IDs. Generic hosts never receive Codex or Claude hooks, transcript identity, model, effort, or permission claims by inference. Only real host tools establish native handles, result facts, and stop controls.
+   Generic hosts use explicit `--host` and a unique `--session` retained across startup and every writer (`AGENTFLOW_SESSION_ID` is equivalent); supply host family only when known. They use manual capture/close and have no hooks. Never infer native handles, transcript identity, model, effort, permission, result, or stop-control facts; only real host tools establish them.
 
    Startup and every notebook writer enforce one session owner for the active Ask. Codex uses agreeing `CODEX_THREAD_ID`/`CODEX_SESSION_ID` values; Claude uses its hook session or `CLAUDE_CODE_SESSION_ID` (with `CLAUDE_SESSION_ID` retained for compatibility). When the current native host supplies no shell identity, retain its actual session ID through `--session <id>`. Conflicting identity refuses before mutation. A foreign or unknown owner leaves the notebook unchanged even with `streams: off`. Before a direct notebook edit, use `agf owner inspect --notebook <target-doc>` and confirm the recorded host/session and Ask match this session. Generic host names and dirty files never establish ownership.
 
    On explicit startup in a linked stream worktree, an unchanged populated first Ask can be claimed without confirmation only when no owner, progress, or Reply exists and Git HEAD has the same notebook with its single A-001 Ask empty. Other unowned populated notebooks require adoption. Closeout releases the completed round; startup may claim the next empty Ask, or an owner-populated next Ask whose immediate predecessor has a valid released owner and completed Reply. Hooks and writers do not infer this authorization. For Codex or Claude, explicit `godev` startup transfers an actively owned open Ask only if pre-lock owner-token and notebook-hash snapshots still match under lock; it records the handoff, fences the prior session, and needs no separate authentication. Stale claims must retry. To recover a legacy populated Ask or hand off from an unsupported host, inspect with `agf owner inspect`, then use `agf owner adopt` with the exact authorized Ask, owner token, notebook hash, host, and session. Hooks never transfer ownership. Never expire owners by age or helper PID.
 
-3. Run it once. Do not precede startup with `pwd`, file inventories, Git status/log, or instruction discovery; the host already supplied the repository and skill paths. Use the returned `local_timestamp`, `next_run_id`, configuration, Git, Ask, and changed paths; rediscover only on error. After startup, inspect only files needed for the current Ask; do not inventory directories, search parent directories, reread configuration, or probe runners for a standalone text-file request. Such a non-operational content artifact is direct host work: after the reference batch below, write the artifact, read the saved file once to verify it, inspect changed paths, then use the documented `agf close --manifest-stdin` example. A Write success/context hint does not replace the required saved-file read. Do not add a failing-test cycle, repeat content verification, or explore workflow source/tests to anticipate a closeout error. Diagnose an actual unresolved failure only after trying the documented close command.
+3. Run it once. Before startup, do not inspect `pwd`, files, Git, or instructions; the host supplied the paths. Use returned context and rediscover only on error. Afterwards, read only files needed for the current Ask. For standalone text artifacts, follow the reference batch, write and read the saved file once, inspect changed paths, then use the documented close example. Do not probe workflow code or tests to predict closeout failures; diagnose only an actual failure after trying the documented command.
+
+   If a tool reports `agf` not found, do not retry it: use the direct `node <active-agentflow-skill-dir>/scripts/agf.js start ...` command above. Non-interactive zsh does not load `~/.zshrc`. For a related command-not-found, check only that command and the capability it needs; unrelated failures do not trigger environment scans.
 
    After startup, **Mandatory answer-recovery gate — run this before interpreting `message.reason` or taking any startup early exit.** Read the live notebook through its end. For every non-empty `ans:` under prior Questions, read the question and later RUN/Reply content. 
 	 	 
-	 Read their questions and later Replies; carry unhandled answers verbatim with question context into the current Ask and resume, preserving history. For a pending design review, also read the exact linked design's question and answer fields before treating its decisions as unanswered. Follow newer instructions; never replay handled or superseded answers, or treat empty answers or suggested defaults as approval. Do not archive unhandled answers or scan archives unless requested.
+	 Carry unhandled answers verbatim with question context into the current Ask and resume, preserving history. For a pending design review, also read the exact linked design's question and answer fields before treating its decisions as unanswered. Follow newer instructions; never replay handled or superseded answers, or treat empty answers or suggested defaults as approval. Do not archive unhandled answers or scan archives unless requested.
 
    For bare `godev`, evaluate `message.reason` only after the mandatory answer-recovery gate. With `activation_only` or `activation_placeholder_repaired` and no unhandled answers, end with `Development workflow ready.`; put any required restart notice before it. Ask is empty, so do not write RUN, Reply, STATUS, or close. Activation keeps this workflow active for later messages. `already_present` means read the current Ask through notebook end and resume. Read all owner content. Do not search for or read `AGENTS.md`, `agf.js`, or `notebook-write.js`. — I-076.
 
-   Once startup or a later message establishes a nonempty current Ask, read `references/writing.md`, `references/closeout.md`, and `references/progress.md` together in one tool call before substantive work. Include any other required files whose triggers are already satisfied by the Ask or startup result. Read required files in full and reuse those already loaded in this session. Batch newly required reads when later triggers arise, before the affected action; do not preload untriggered references. Empty activation and pending fast-lane without a task skip this batch.
+   Once the current Ask is nonempty, read `references/writing.md`, `references/closeout.md`, and `references/progress.md` in one tool call before substantive work. Read them fully; reuse files already read. Batch other triggered references with these reads and any later-required references before acting. Empty activation and taskless fast-lane skip this step.
 
 4. Use startup `configuration.language` for Agentflow writing: answers, devlog records, user documents, code comments, and commits. It overrides host/personal defaults; preserve owner quotes unless an exact deliverable request says otherwise.
 
 5. Startup is idempotent. Load `references/streams.md` when `stream_decision` requires it.
 
-   If `hooks_restart_required: true`, tell the owner once to restart the host; until then, use the per-message capture below.
+   For Codex and Claude, startup verifies project hooks without writing host settings. If `hooks.status` is `missing`, report the config path and use suggested `agf hooks --project --host <host>` only when the owner requests installation; global installation requires `agf hooks --global --host <host>`. Missing hooks do not block startup. `agf hooks --status --project --host <host>` reports registration and recent receipts; no receipt cannot distinguish an unloaded config from an event that was not invoked. After installation or when no event is observed, restart the host and test a prompt and completed round. If setup returns `hooks_restart_required: true`, remind the owner to restart; use per-message capture until then.
 
 6. Startup/input capture compact completed rounds when the notebook exceeds 1,000 lines or 768 KiB. Before closeout, read `references/progress.md`; if still needed, run `node <active-agentflow-skill-dir>/scripts/agf.js compact --notebook <target-doc>` with the current host/session and follow its safeguards. The notebook and archive are authoritative append-only history: never edit completed records or archived bytes; only verified byte-preserving compaction may move them.
 
@@ -93,11 +96,11 @@ The Plus budget permits one external worker, delegation depth one, no parallel w
 
 Capture every owner message, including diagnostics, in the current Ask. If no hook confirms capture, use `notebook-write.js append-input --notebook <startup-relative path> --input-stdin [--host <safe-id>]` with exact text. Format paragraphs as `+ <text>`; separate them with blank lines and indent pasted headings. Add no comments/blockquotes. Hook notices, tool output and queued text are not owner input.
 
-Trace toggles are Codex `UserPromptSubmit` controls, not startup tasks. They need a loaded hook; clean folders need the global hook. Without a hook acknowledgement, report that setup step instead of running `godev` startup. State is ignored and checkout-local at `.agentflow/.tmp/trace-mode.json`; toggle prompts are not traced, later prompts are. Bare `godev trace[ full]` is retired. Enable warns (~40–70 tokens/prompt); no extra call. Show L0–L5/model/status/count with plain keys, bold values, unknown explicit.
+Codex `UserPromptSubmit` handles trace controls, not startup. A loaded hook is required; clean folders need the global hook. Without its acknowledgement, report setup instead of starting `godev`. Trace state is checkout-local at `.agentflow/.tmp/trace-mode.json`: enable sets it on; disable sets it off. Keep the last successful toggle for this session; it overrides old trace rules. Controls are untraced; later prompts follow saved state. Bare `godev trace[ full]` is retired. Enable: ~40–70 tokens/prompt; no extra call. While saved state is on, show L0–L5/model/status/count (plain keys, bold, unknown explicit); when off, omit the line.
 
 Finish the saved Ask and its gates. Continue after follow-ups unless canceled or replaced. Use command output as evidence; close with `agf close --manifest-stdin`.
 
-At every stop, state completion, result, cause, exact owner action and next step; name what approval unlocks. Never leave the owner unsure. — P0.
+At every stop, answer the owner first; state **Status**, **Result**, **Owner action**, and **Next step**; add **Cause** if incomplete or blocked. Owner action gives the exact copyable command, working directory, prerequisites, and effect—or exact approval response and what it unlocks. Say “none” if no action is needed; never invent a command. Title distinct sections; keep simple stops concise; hide checker feedback. Stop-hook format failures are silent and non-blocking because hosts surface blocks as feedback; never replace SUMMARY. — P0.
 
 ## Load rules only when triggered
 
@@ -192,19 +195,19 @@ Read `references/progress.md` before decomposing work, recording a material resu
 
 - Commit scoped authorized units without repeated approval. Push requires an explicit request; before pushing, inspect `HEAD..origin/<branch>`. Never force-push or disturb unrelated/other-session work.
 
-- After successful Reply, closeout, and required push, use the successful close result’s `display.text`: with `inline-reply: off` (default), output only `<target-doc path relative to the main checkout root> updated`; with `on`, display the saved Reply. Always keep the substantive answer in the notebook. During work, output short status updates.
+- After closeout, use returned `display.text`: inline off shows saved SUMMARY plus `<target-doc> updated`; inline on shows full Reply. Summary states status, result, cause/limit, owner action, next step. Follow the section-title rule above; keep full Reply in notebook.
 
 ## Settings
 
-- Valid controls are `workspace-dir`, `allowed-worker`, `review-policy`, `cli-provider`, `auto-reply`, `ask-names`, `streams`, `lang`, `target-doc`, `allow-ag`, `git-timeout-ms`, `log-verbosity`, `inline-reply`, `large-work-minutes`, `completion-cleanup`, and `completion-cleanup-interval-days`. `allowed-worker` is a nonempty JSON permission array of unique `external`, `internal`, and `host` values; its order has no execution meaning. For each task, the host chooses an eligible permitted kind and records a brief reason. `review-policy` is `prefer-independent` or `require-independent`; it controls review fallback, not execution permission. Legal stream values are `streams: ask|always|off`. With streams, `off` reports the signal but neither asks to open a stream nor opens one. Explicit `new-feature:` still opens its requested stream. Validate changes and write adjacent `ag.json` atomically. New projects default to all three worker kinds and `prefer-independent`; v7 migration preserves the conservative JSON value `["external", "host"]` and `require-independent` posture until explicitly opted in. Never rebuild established settings from STATUS.
+- Use hyphenated keys from `scripts/ag-settings.js`; atomically update adjacent `ag.json`, never rebuild from STATUS. Set `<key>: <value>`, not `$variable`.
 
-- Change a setting with `<key>: <value>`, not an internal `$variable` name. Use hyphens between words in setting names.
+- `references/delegation.md` covers worker/review rules. `streams: ask|always|off`; `off` reports the signal but neither asks to open a stream nor opens one. Explicit `new-feature:` is always immediate authorization to open its requested stream. Defaults: all workers, `prefer-independent`; v7 retains `["external", "host"]` and `require-independent` until opted in.
 
-- `auto-reply: on` resolves only safe routine defaults. `keep-going` enables it temporarily for the current open list, then resets it. Owner-only choices, irreversible work, and new outward channels always stop for the owner.
+- `auto-reply: on` resolves safe routine defaults. `keep-going` enables it for the current approved batch, then resets it. Owner-only choices, irreversible work, and new outward channels still require the owner.
 
-- `log-verbosity: off|wip|all` controls future progress records and defaults to `all`. `off` omits future RUN and WIP records; `wip` keeps WIP but omits RUN; `all` preserves existing behavior. Every level still writes the Ask and complete Reply, preserving history and tracker, review, test, and other validation obligations. Checkpoint cadence applies only to records allowed by the selected level, and a footer must not claim that a RUN was written when it was suppressed.
+- `log-verbosity: off|wip|all` controls future progress records only; every level keeps the Ask, full Reply, and validation obligations. Checkpoint cadence applies only to records allowed by the selected level.
 
-- `inline-reply: on|off` defaults to `off`. `on` saves the normal Reply and displays that saved Reply after successful closeout or delivery; `off` retains the path-updated acknowledgement. It is independent of `log-verbosity`. Use the `display.text` returned by successful `agf close` only after closeout/delivery: it is the exact saved Reply when inline display is on and `<notebook> updated` otherwise.
+- `inline-reply: on|off` defaults to `off` and is independent of `log-verbosity`; see the closeout display rule above.
 
 - `target-doc` rename, stream delivery, and cleanup keep their exact script-driven contracts in their referenced rulebooks. Do not substitute manual Git sequences. `continue`/`next` only re-read and resume.
 

@@ -1,6 +1,28 @@
 # Changelog
 
-Notable Agentflow Frugal changes, with the newest version first. Release metadata uses major.minor.patch; the current release is 8.4.0. Agentflow Frugal v8.4.0 is based on upstream Agentflow v8.3.3. Earlier dates identify recorded source milestones, not independently verified public publication dates.
+Notable Agentflow Frugal changes, with the newest version first. Release metadata uses major.minor.patch; the current release is 8.5.0. Agentflow Frugal v8.5.0 is based on upstream Agentflow v8.3.3. Earlier dates identify recorded source milestones, not independently verified public publication dates.
+
+## [8.5.0]
+
+### Added
+
+- An exact `godev help` and `/godev help` fast path that returns built-in usage without starting or closing a notebook round.
+
+### Changed
+
+- Startup and closeout validate command and Git-metadata availability before writes, check linked workflow state, preserve canonical stream paths, and distinguish local delivery from remote delivery.
+
+- Hook events and interrupted startup phases are recorded and recovered with bounded, idempotent receipts; ambiguous ownership and recovery states remain inspectable.
+
+- Stop guidance states completion, result, exact owner action (including commands or approval text), and next step; incomplete work includes its cause.
+
+### Fixed
+
+- Persistent trace disable state now overrides earlier trace instructions for later prompts in the same project session.
+
+- Generic-host startup no longer reports Codex/Claude-specific hook configuration paths when native hooks are unavailable.
+
+- Hook installation and status reporting follow the selected project or global installation scope.
 
 ## [8.4.0]
 

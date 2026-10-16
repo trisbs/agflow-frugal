@@ -30,7 +30,7 @@ const fixture = ({ reference_other = false } = {}) => {
     const stamp = format_local_timestamp(new Date(now - age * DAY))
     const ctx = { ...options, ask }
     const related = reference_other && i === 2 ? `Still needed: [earlier evidence](${location({ ...options, ask: 'A-001' }).href})\n\n` : ''
-    const draft = `# ← Reply / ${ask}\n\n* _${stamp} (host)_\n\n## [SUMMARY]\n\n- Done.\n\n## [FINAL REPORT]\n\n1. Completed.\n\n${related}\x60\x60\x60completion-metadata\nHost review: PASS — checked historical fixture.\n\x60\x60\x60\n`
+    const draft = `# ← Reply / ${ask}\n\n* _${stamp} (host)_\n\n## [SUMMARY]\n\n- Status: complete.\n- Result: the historical fixture round is complete.\n- Owner action: none.\n- Next step: no further action is needed.\n\n## [FINAL REPORT]\n\n1. Completed.\n\n${related}\x60\x60\x60completion-metadata\nHost review: PASS — checked historical fixture.\n\x60\x60\x60\n\n## Questions (batched — each with a suggested default)\n\n- None.\n`
     let reply = publish_reply(draft, ctx)
     const read = completion_metadata(reply, ctx)
     read.record.created_at = stamp

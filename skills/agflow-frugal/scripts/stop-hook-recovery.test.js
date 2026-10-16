@@ -8,6 +8,11 @@ const { spawnSync } = require('node:child_process');
 const { test } = require('node:test');
 
 const hook = path.join(__dirname, 'stop-hook.js');
+const hook_events = require('./hook-events');
+const state_without_event_receipts = directory => fs.readdirSync(directory, { recursive: true })
+  .filter(name => !String(name).split(path.sep).includes('hook-events'))
+  .filter(name => fs.statSync(path.join(directory, name)).isFile())
+  .map(name => [name, fs.readFileSync(path.join(directory, name), 'utf8')]);
 
 test('retired one-shot Codex trace prompts direct owners to persistent mode', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agf-prompt-trace-'));
@@ -56,6 +61,8 @@ test('Codex trace enable persists across prompts until disable without tracing t
   const enabled_output = JSON.parse(enabled.stdout);
   assert.match(enabled_output.systemMessage, /TRACE MODE.*ENABLED/is);
   assert.match(enabled_output.systemMessage, /40.?70 tokens/i);
+  assert.match(enabled_output.hookSpecificOutput.additionalContext, /Retain trace=on in this session/);
+  assert.match(enabled_output.hookSpecificOutput.additionalContext, /replaces earlier trace instructions/);
   assert.doesNotMatch(enabled_output.hookSpecificOutput.additionalContext, /For this godev trace/);
   assert.deepEqual(JSON.parse(fs.readFileSync(mode_file, 'utf8')), { version: 1, enabled: true });
 
@@ -76,14 +83,58 @@ test('Codex trace enable persists across prompts until disable without tracing t
   assert.equal(disabled.status, 0, disabled.stderr);
   const disabled_output = JSON.parse(disabled.stdout);
   assert.match(disabled_output.systemMessage, /TRACE MODE.*DISABLED/is);
+  assert.match(disabled_output.hookSpecificOutput.additionalContext, /Retain trace=off in this session/);
+  assert.match(disabled_output.hookSpecificOutput.additionalContext, /replaces earlier trace instructions/);
+  assert.match(disabled_output.hookSpecificOutput.additionalContext, /Do not print task\/model trace.*until a successful enable/is);
   assert.doesNotMatch(disabled_output.hookSpecificOutput.additionalContext, /For this godev trace/);
   assert.deepEqual(JSON.parse(fs.readFileSync(mode_file, 'utf8')), { version: 1, enabled: false });
 
-  const ordinary = invoke('ordinary task after disable');
+  for (const prompt of ['ordinary task after disable', 'second ordinary task after disable']) {
+    const ordinary = invoke(prompt);
+    assert.equal(ordinary.status, 0, ordinary.stderr);
+    const ordinary_output = JSON.parse(ordinary.stdout);
+    assert.equal(Object.hasOwn(ordinary_output, 'systemMessage'), false);
+    assert.doesNotMatch(ordinary_output.hookSpecificOutput.additionalContext, /trace=|For this godev trace/);
+  }
+
+  const reenabled = invoke('godev trace enable');
+  assert.equal(reenabled.status, 0, reenabled.stderr);
+  assert.match(JSON.parse(reenabled.stdout).hookSpecificOutput.additionalContext, /Retain trace=on in this session/);
+  const resumed = invoke('ordinary task after reenable');
+  assert.equal(resumed.status, 0, resumed.stderr);
+  assert.match(JSON.parse(resumed.stdout).systemMessage, /AGF TRACE — CURRENT RUN/);
+});
+
+test('a failed trace disable preserves enabled state and the retained session instruction', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agf-trace-toggle-fault-'));
+  const mode_file = path.join(root, '.agentflow/.tmp/trace-mode.json');
+  const preload = path.join(root, 'rename-fault.cjs');
+  const env = { ...process.env };
+  for (const name of ['AGENTFLOW_EXTERNAL_DELEGATE', 'CODEX_THREAD_ID', 'CODEX_SESSION_ID', 'CLAUDE_SESSION_ID', 'AGENTFLOW_SESSION_ID', 'CLAUDE_PROJECT_DIR']) delete env[name];
+  const invoke = (prompt, fault = false) => spawnSync(process.execPath, [...(fault ? ['--require', preload] : []), hook, '--host', 'codex'], {
+    input: JSON.stringify({ cwd: root, hook_event_name: 'UserPromptSubmit', session_id: 'trace-toggle-fault', model: 'gpt-6.1-sol', prompt }),
+    env, cwd: root, encoding: 'utf8',
+  });
+  const enabled = invoke('godev trace enable');
+  assert.equal(enabled.status, 0, enabled.stderr);
+  const before = fs.readFileSync(mode_file, 'utf8');
+  fs.writeFileSync(preload, `const fs = require('node:fs');
+const rename = fs.renameSync;
+fs.renameSync = (source, target) => {
+  if (target === ${JSON.stringify(mode_file)}) throw Object.assign(new Error('injected read-only state'), { code: 'EROFS' });
+  return rename(source, target);
+};\n`);
+  const failed = invoke('godev trace disable', true);
+  assert.equal(failed.status, 0, failed.stderr);
+  const output = JSON.parse(failed.stdout);
+  assert.match(output.systemMessage, /CHANGE FAILED/);
+  assert.match(output.hookSpecificOutput.additionalContext, /Keep the last successful session trace state/);
+  assert.doesNotMatch(output.hookSpecificOutput.additionalContext, /Retain trace=off/);
+  assert.equal(fs.readFileSync(mode_file, 'utf8'), before);
+  assert.deepEqual(fs.readdirSync(path.dirname(mode_file)).filter(name => name.endsWith('.tmp')), []);
+  const ordinary = invoke('ordinary task after failed disable');
   assert.equal(ordinary.status, 0, ordinary.stderr);
-  const ordinary_output = JSON.parse(ordinary.stdout);
-  assert.equal(Object.hasOwn(ordinary_output, 'systemMessage'), false);
-  assert.doesNotMatch(ordinary_output.hookSpecificOutput.additionalContext, /For this godev trace/);
+  assert.match(JSON.parse(ordinary.stdout).systemMessage, /AGF TRACE — CURRENT RUN/);
 });
 
 test('Codex persistent trace controls work in a clean folder without a devlog', () => {
@@ -245,8 +296,12 @@ for (const host of ['codex', 'claude']) {
         assert.match(context.additionalContext, /repair/i);
         assert.doesNotMatch(context.additionalContext, /instruction was saved/i);
         assert.equal(fs.readFileSync(file, 'utf8'), notebook);
-        assert.deepEqual(fs.readdirSync(path.dirname(file)), ['devlog.md']);
+        assert.deepEqual(state_without_event_receipts(path.dirname(file)), [['devlog.md', notebook]]);
       }
+      const receipts = hook_events.read_recent({ root, host });
+      assert.equal(receipts.length, 2);
+      assert.ok(receipts.every(receipt => receipt.outcome === 'capture_not_saved'));
+      assert.equal(JSON.stringify(receipts).includes('Fix the missing Ask now.'), false);
     });
   }
 }
@@ -266,7 +321,7 @@ for (const host of ['codex', 'claude']) {
       }
       const notebook = '# → Ask / A-044\n\n+ manually entered request\n';
       fs.writeFileSync(file, notebook);
-      const snapshot = () => fs.readdirSync(path.dirname(file), { recursive: true }).filter(name => fs.statSync(path.join(path.dirname(file), name)).isFile()).map(name => [name, fs.readFileSync(path.join(path.dirname(file), name), 'utf8')]);
+      const snapshot = () => state_without_event_receipts(path.dirname(file));
       const before = snapshot();
       const env = { ...process.env };
       for (const name of ['AGENTFLOW_EXTERNAL_DELEGATE', 'CODEX_THREAD_ID', 'CODEX_SESSION_ID', 'CLAUDE_SESSION_ID', 'AGENTFLOW_SESSION_ID', 'CLAUDE_PROJECT_DIR']) delete env[name];
@@ -278,6 +333,10 @@ for (const host of ['codex', 'claude']) {
         assert.match(notice, /Continue with the submitted request/);
         assert.deepEqual(snapshot(), before);
       }
+      const receipts = hook_events.read_recent({ root, host });
+      assert.equal(receipts.length, 3);
+      assert.ok(receipts.every(receipt => receipt.outcome === 'capture_owner_conflict'));
+      assert.doesNotMatch(JSON.stringify(receipts), /godev|no-ag|hello/u);
     });
   }
 }

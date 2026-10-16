@@ -26,7 +26,7 @@ const fixture = (switches = {}, notebook = '.agentflow/devlog.md') => {
   write(root, 'ag.json', JSON.stringify(config));
   write(root, notebook, settings.format_status(status) + '---\n\n# → Ask / A-001\n\n+ Keep my full answer.\n');
   ownership_fixture.adopt(root, notebook, 'test-host');
-  const manifest = { version: 1, notebook, ask: 'A-001', run_events: ['- Final verification passed.'], reply: '## [SUMMARY]\n\n- Saved answer.\n\n## [FINAL REPORT]\n\n1. Full answer is retained.\n', status, allowed_paths: [notebook], commit_message: 'save answer', delivery: { mode: 'local' } };
+  const manifest = { version: 1, notebook, ask: 'A-001', run_events: ['- Final verification passed.'], reply: '## [SUMMARY]\n\n### Status\n\nComplete.\n\n### Result\n\nFocused checks passed.\n\n### Owner action\n\nNone.\n\n### Next step\n\nNo further action is needed.\n\n## [FINAL REPORT]\n\n1. Full answer is retained.\n', status, allowed_paths: [notebook], commit_message: 'save answer', delivery: { mode: 'local' } };
   return { root, notebook, config, manifest, read: () => fs.readFileSync(path.join(root, notebook), 'utf8') };
 };
 const cli = (f, script, args, input) => spawnSync(process.execPath, [path.join(__dirname, script), ...args], { cwd: f.root, encoding: 'utf8', input, env: { ...process.env, CODEX_SESSION_ID: '', CODEX_THREAD_ID: '' } });
@@ -118,12 +118,29 @@ test('close always persists Reply, reports configured display and retries withou
     const round = parse_devlog(saved).rounds[0];
     assert.match(round.reply_text, /Full answer is retained/);
     assert.equal(saved.includes('[RUN-001]'), level === 'all');
-    assert.deepEqual(result.display, { inline_reply: inline === 'on', text: inline === 'on' ? round.reply_text.replace(/\r?\n---\s*$/u, '').trim() : `${f.notebook} updated` });
+    const summary = require('./round-linter').reply_summary_text(round.reply_text).trim();
+    assert.deepEqual(result.display, { inline_reply: inline === 'on', text: inline === 'on' ? round.reply_text.replace(/\r?\n---\s*$/u, '').trim() : `${summary}\n\n${f.notebook} updated` });
+    assert.match(result.display.text, /### Status[\s\S]*### Result[\s\S]*### Owner action[\s\S]*### Next step/u);
     const retry = cli(f, 'agf.js', args, input);
     assert.equal(retry.status, 0, retry.stdout + retry.stderr);
     assert.equal(f.read(), saved);
     assert.deepEqual(JSON.parse(retry.stdout).display, result.display);
   }
+});
+
+test('default close display falls back to the saved Reply when SUMMARY is absent', () => {
+  const f = fixture({ 'inline-reply': 'off' });
+  f.manifest.reply = '## [FINAL REPORT]\n\n**Status:** complete\n\n**Result:** the saved result is complete.\n\n**Owner action:** none\n\n**Next step:** no further action is needed.\n\n1. The saved result is complete.\n\n## Questions (batched — each with a suggested default)\n\n- None.\n';
+  const result = cli(f, 'agf.js', ['close', '--manifest-stdin'], JSON.stringify(f.manifest));
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const saved = parse_devlog(f.read()).rounds[0].reply_text.replace(/\r?\n---\s*$/u, '').trim();
+  assert.deepEqual(JSON.parse(result.stdout).display, { inline_reply: false, text: `${saved}\n\n${f.notebook} updated` });
+});
+
+test('saved SUMMARY extraction ignores fenced headings and supports cosmetic heading forms', () => {
+  const { reply_summary_text } = require('./round-linter');
+  const reply = '```md\n## [SUMMARY]\n\n- Ignore this example.\n```\n\n### Summary\n\n- Work is complete.\n\n## [FINAL REPORT]\n\nDetails.\n';
+  assert.equal(reply_summary_text(reply), '- Work is complete.');
 });
 
 test('wip completion waives only RUN presence, retaining progress, tracker and scope checks', () => {

@@ -1096,12 +1096,9 @@ const initialize_project = (options = {}) => {
 	const notebook_path = options.notebook_path || workspace_paths(template).notebook
 	const notebook_abs = node_path.isAbsolute(notebook_path) ? notebook_path : node_path.resolve(repo_root, notebook_path)
 	const config_path = options.config_path || node_path.resolve(repo_root, 'ag.json')
-	if (node_fs.existsSync(notebook_abs)) return ensure_configuration({ ...options, repo_root, notebook_path, config_path })
-
-	if (node_fs.existsSync(config_path)) {
-		throw new SettingsError(`${display_path(config_path, repo_root)} exists but its notebook is missing; restore the notebook or repair the pair explicitly`, { code: 'AG_CONFIG_SCOPE' })
+	if (node_fs.existsSync(notebook_abs) && !(options.recover_interrupted_bootstrap === true && !node_fs.existsSync(config_path))) {
+		return ensure_configuration({ ...options, repo_root, notebook_path, config_path })
 	}
-
 	const config = template
 	config.switches.lang = detect_initial_language(options)
 	config.switches['target-doc'] = relative_notebook_path(repo_root, notebook_path)
@@ -1122,6 +1119,23 @@ const initialize_project = (options = {}) => {
 		streams: [],
 	})
 	const notebook = `${status}\n---\n\n${format_ask_heading('A-001', { config, repo_root })}\n\n+ \n`
+	if (node_fs.existsSync(notebook_abs)) {
+		if (options.recover_interrupted_bootstrap === true && !node_fs.existsSync(config_path)) {
+			let existing = null
+			try { existing = node_fs.readFileSync(notebook_abs, 'utf8') } catch {}
+			if (existing === notebook) {
+				write_config_atomic(config_path, config, { ...options, repo_root, active_host })
+				return { config, config_path, notebook_path: notebook_abs, created: true, recovered: true, active_host }
+			}
+			throw new SettingsError(`interrupted startup left ${display_path(notebook_abs, repo_root)} without its configuration, and the notebook does not exactly match the canonical empty bootstrap; preserve it and repair the configuration pair explicitly`, { code: 'AG_BOOTSTRAP_RECOVERY_UNVERIFIED' })
+		}
+		return ensure_configuration({ ...options, repo_root, notebook_path, config_path })
+	}
+
+	if (node_fs.existsSync(config_path)) {
+		throw new SettingsError(`${display_path(config_path, repo_root)} exists but its notebook is missing; restore the notebook or repair the pair explicitly`, { code: 'AG_CONFIG_SCOPE' })
+	}
+
 	write_text_atomic(notebook_abs, notebook, options)
 	try {
 		write_config_atomic(config_path, config, { ...options, repo_root, active_host })

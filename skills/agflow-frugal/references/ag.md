@@ -10,6 +10,9 @@ Incident citations explain earlier failures, not permanent remedies. Approved re
 
 Read `references/delegation.md` before selecting or dispatching a worker; it owns frozen-brief transport, external/native/host selection, confinement limits, profiles, watchdog, attempts, and acceptance.
 
+`ask-names: on|off` controls whether new Ask headings include the asker’s name.
+`large-work-minutes: <value>` sets the large-work threshold; valid values are 1–10080 and the default is 120.
+
 Read and validate adjacent `ag.json`, STATUS, the latest unfinished Ask, Git state, and exact current artifacts before choosing work. Record one route: `direct`, `selected_advisors`, `full_pipeline`, or `blocked`, naming operation, `allow-ag`, material risks, named questions, owner confirmation, and plain-language reason. `$target_doc` is the owner conversation and live recovery surface; STATUS is recovery projection, not settings storage.
 
 - `direct`: L0/L1 use the configured Cheap tier and L2/L3 use the configured Basic tier. L4 uses Basic Direct with an optional Better review, and L5 uses Basic Coordinator with Better workers only after the Debate hard gate passes. Tier names are provider-independent. The main session launches workers; workers do not recursively delegate. Honor explicit executor choices, no-delegation, and fast-lane; execution choice does not waive applicable checks or approvals.

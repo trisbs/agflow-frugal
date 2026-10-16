@@ -875,7 +875,7 @@ test('queue discovery is exact, numeric, fresh, and ignores control files', asyn
 
     const result = await run_looper(base_options(queue, fake_child, { launch_log }))
 
-    assert.equal(result.code, 0)
+    assert.equal(result.code, 0, result.message || JSON.stringify(result))
     assert.deepEqual(read_json_lines(launch_log).map((entry) => entry.task), ['plan-001.md', 'plan-002.md', 'plan-010.md'])
     assert.notEqual(read_json_lines(launch_log)[0].pid, read_json_lines(launch_log)[1].pid)
     for (const name of ['plan-001.md', 'plan-002.md', 'plan-010.md']) assert.ok(fs.existsSync(path.join(queue, 'done', name)))

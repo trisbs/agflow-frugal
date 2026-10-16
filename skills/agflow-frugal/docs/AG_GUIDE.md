@@ -214,7 +214,7 @@ Type `settings` to see the active values and available choices. To change one, s
 
 - **Progress records:** `log-verbosity: off|wip|all` defaults to `all`. For example, `log-verbosity: wip` keeps checkpoints while omitting future RUN entries.
 
-- **Reply display:** `inline-reply: on|off` defaults to `off`. For example, `inline-reply: on` displays the saved normal Reply after successful closeout or delivery; `off` keeps the path-updated acknowledgement. This switch is independent of `log-verbosity`.
+- **Reply display:** `inline-reply: on|off` defaults to `off`. `on` displays the saved full Reply; `off` displays its saved summary and the notebook path. When several categories apply, use short titles such as Status, Result, Cause, Owner action, and Next step. This switch is independent of `log-verbosity`.
 
 - **Development process:** `allow-ag: on|ask|off` permits the pipeline, asks first, or blocks it. Direct work remains available under all three settings. Typing `ag` does not override `off`.
 

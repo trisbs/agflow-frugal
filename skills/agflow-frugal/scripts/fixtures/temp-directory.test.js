@@ -9,7 +9,8 @@ const make_temp_directory = require('./temp-directory')
 
 test('temporary fixtures stay under home/tmp and refuse a symlink or file there', () => {
   const root = make_temp_directory('agentflow-scratch-check-')
-  assert.equal(path.dirname(root), path.join(fs.realpathSync(os.homedir()), 'tmp'))
+  const expected_home = process.env.AGFLOW_TEST_HOME ?? os.homedir()
+  assert.equal(path.dirname(root), path.join(fs.realpathSync(expected_home), 'tmp'))
   const fresh = make_temp_directory('fresh-', root)
   assert.equal(path.dirname(fresh), path.join(root, 'tmp'))
   assert.equal(fs.statSync(fresh).mode & 0o077, 0)

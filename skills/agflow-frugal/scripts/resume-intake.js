@@ -113,7 +113,7 @@ const changed_paths = repo_root => {
     paths.push(record.slice(3))
     if (/[RC]/u.test(code)) index += 1
   }
-  return [...new Set(paths)].sort()
+  return [...new Set(paths)].filter(relative => relative !== '.agentflow-start.lock').sort()
 }
 
 const head_text = (repo_root, notebook_path) => {
@@ -200,13 +200,14 @@ const bootstrap_paths_match = ({ repo_root, changed, bootstrap_provenance }) => 
   })
 }
 
-const stream_decision = ({ repo_root, branch, status, changed, expected_owner, expected_unborn, bootstrap_provenance, interrupted_start = false }) => {
+const stream_decision = ({ repo_root, branch, status, changed, expected_owner, expected_unborn, bootstrap_provenance, interrupted_start = false, startup_in_progress = false }) => {
   const reasons = []
   const default_ref = default_branch(repo_root)
 	if (default_ref !== null && branch !== default_ref) reasons.push(`branch ${branch} is not the default branch ${default_ref}`)
 	if (default_ref === null && !['main', 'master'].includes(branch)) reasons.push(`branch ${branch} has no proven default branch`)
   if (has_active_stream(status)) reasons.push('STATUS contains an active stream')
-  if (interrupted_start && changed.length > 0) reasons.push('startup did not return a completed transaction result')
+  if (startup_in_progress) reasons.push('a process recorded by the startup lock or recovery guard is still present and may still own a startup transition')
+  if (interrupted_start) reasons.push('prior startup changes cannot be attributed to a verified baseline')
 
   if (reasons.length === 0 && expected_owner) {
     return { reason: 'owner_input_only', required_next_rulebook: null, evidence: ['the final empty Ask changed into the current owner message only'] }
@@ -224,7 +225,7 @@ const stream_decision = ({ repo_root, branch, status, changed, expected_owner, e
   return { reason: 'foreign_or_parallel_work', required_next_rulebook: 'references/streams.md', evidence: reasons }
 }
 
-const collect_intake = ({ repo_root = process.cwd(), notebook_path, active_host = 'codex', host_family, bootstrap_provenance, interrupted_start = false } = {}) => {
+const collect_intake = ({ repo_root = process.cwd(), notebook_path, active_host = 'codex', host_family, bootstrap_provenance, interrupted_start = false, startup_in_progress = false } = {}) => {
 	const root = fs.realpathSync(repo_root)
 	const root_config_path = path.join(root, 'ag.json')
 	const settings_options = { repo_root: root, active_host, persist_migration: false, ...(host_family ? { host_family } : {}) }
@@ -289,6 +290,7 @@ const collect_intake = ({ repo_root = process.cwd(), notebook_path, active_host 
       expected_unborn,
       bootstrap_provenance,
       interrupted_start,
+      startup_in_progress,
     }), ...(fast_lane ? { open_new_stream: false } : {}) },
     status,
     current_ask,
@@ -316,7 +318,7 @@ const main = argv => {
   process.stdout.write(`${JSON.stringify(collect_intake(parse_args(argv)), null, 2)}\n`)
 }
 
-module.exports = { collect_intake, final_ask, final_ask_span, expected_owner_input, expected_unborn_owner_input, status_block, file_identity, stream_decision, STREAM_DECISION_REASONS }
+module.exports = { collect_intake, changed_paths, final_ask, final_ask_span, expected_owner_input, expected_unborn_owner_input, status_block, file_identity, stream_decision, STREAM_DECISION_REASONS }
 
 if (require.main === module) {
   try {

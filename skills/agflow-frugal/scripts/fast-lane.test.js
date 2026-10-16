@@ -14,7 +14,7 @@ const { format_local_timestamp } = require('./local-time.js');
 const ownership_fixture = require('./fixtures/notebook-owner');
 ownership_fixture.configure();
 
-const reply = () => `# ← Reply / A-001\n\n* _${format_local_timestamp()} (test/none)_\n\n## [SUMMARY]\n\n- Done.\n\n## [FINAL REPORT]\n\n- Host gate: PASS.\n\n- Host review: PASS — inspected fixture source and test evidence; no blocking findings.\n\n## Questions (batched — each with a suggested default)\n\n- None.\n\n---\n\n# → Ask / A-002\n\n+\n`;
+const reply = () => `# ← Reply / A-001\n\n* _${format_local_timestamp()} (test/none)_\n\n## [SUMMARY]\n\n- Status: complete.\n- Result: the login behavior is fixed and the focused test passed.\n- Owner action: none.\n- Next step: none.\n\n## [FINAL REPORT]\n\n- Host gate: PASS.\n\n### Outcome coverage\n\n| Requested outcome | Delivered result | Evidence | Status |\n| --- | --- | --- | --- |\n| Fix the login bug | The login behavior is fixed | Focused test passed | Verified |\n\n- Host review: PASS — inspected fixture source and test evidence; no blocking findings.\n\n## Questions (batched — each with a suggested default)\n\n- None.\n\n---\n\n# → Ask / A-002\n\n+\n`;
 const fixture = t => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agentflow-fast-lane-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -135,6 +135,17 @@ test('fast-lane keeps truthful push claims and valid configuration mandatory', t
   const invalid_config = f.hook('codex');
   assert.equal(invalid_config.status, 2);
   assert.match(invalid_config.stderr, /configuration_valid/);
+});
+
+test('fast-lane does not bypass outcome coverage for completed implementation work', t => {
+  const f = fixture(t);
+  const text = f.write('+ fast-lane fix the login bug', true).replace(/### Outcome coverage[\s\S]*?\n\n- Host review:/u, '- Host review:');
+  fs.writeFileSync(path.join(f.root, '.agentflow/devlog.md'), text);
+  const result = lint_round(f.facts(text));
+  assert.equal(result.checks.find(check => check.id === 'outcome_coverage').status, 'fail');
+  const stopped = f.hook('codex');
+  assert.equal(stopped.status, 2, stopped.stderr);
+  assert.match(stopped.stderr, /outcome_coverage/);
 });
 
 test('fast-lane and standalone review skips still require host self-review before completion', t => {

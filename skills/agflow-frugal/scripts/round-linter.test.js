@@ -129,6 +129,15 @@ const valid_tracker = state => {
   return `# Tracker\n\n## Identity\n\n- **Work key:** A-001-x.\n\n- **Active Ask:** A-001.\n\n- **Goal:** Keep the accepted work visible.\n\n- **Last update:** 2026-08-30 12:00:00 +0800.\n\n- **Evidence commit:** ${complete ? 'a'.repeat(40) : 'uncommitted'}.\n\n## Overall state\n\n- **State:** ${state}.\n\n- **Reason:** ${complete ? 'All accepted work is proven complete.' : 'Work remains.'}\n\n- **Total:** ${total}.\n\n- **Completed:** ${completed}.\n\n- **Remaining:** ${remaining}.\n\n## Accepted task checklist\n\n${checklist}\n## Accepted scope changes\n\n- None.\n\n## Current recovery\n\n- **Current item:** ${complete ? 'None.' : 'T-2.'}\n\n- **Last proven result:** E-1 passed.\n\n- **Active blocker or running process:** None.\n\n- **Next safe action:** ${complete ? 'None.' : 'Run T-2.'}\n\n- **Expected changed files:** round-linter.js and round-linter.test.js.\n\n## Completion proof\n\n- **All accepted tasks checked:** ${complete ? 'yes' : 'no'}.\n\n- **Blocking accepted decision:** none.\n\n- **Operation running:** ${complete ? 'no' : 'yes'}.\n\n- **Next action remaining:** ${complete ? 'none' : 'T-2'}.\n\n- **Evidence status:** ${complete ? 'complete' : 'current'}.\n\n- **Judgment:** ${state}.\n\n## Update meaning\n\n- Saving this tracker is a recovery checkpoint, not a stop signal.\n\n- Work continues with the next unfinished item unless an independent stop condition applies.\n`;
 };
 
+node_test.test('tracker lint rejects linked initiative state conflicts before closeout', () => {
+  const facts = tracker_facts(valid_tracker('active'), {
+    initiative_state: { status: 'fail', errors: ['plan current task T-12 disagrees with Task.md current task T-11'] },
+  });
+  const result = lint_tracker(facts);
+  node_assert.strictEqual(result.status, 'fail');
+  node_assert.match(result.detail, /linked initiative state conflicts.*plan current task T-12/i);
+});
+
 const tracker_facts = (text, overrides = {}) => ({
   required: true,
   path: 'features/add-tracker/artifacts/A-001-add-tracker/tracker.md',
@@ -545,6 +554,17 @@ node_test.test('terminal_one_line warns for a multi-line terminal dump without b
   node_assert.strictEqual(status_for(result, 'terminal_one_line').status, 'warn');
   node_assert.strictEqual(result.ok, true);
   node_assert.match(status_for(result, 'terminal_one_line').detail, /2 lines/);
+});
+
+node_test.test('default close display must include the saved summary and notebook path', () => {
+  const reply = '## [SUMMARY]\n\n### Status\n\nComplete.\n\n### Result\n\nChecks passed.\n\n### Owner action\n\nNone.\n\n### Next step\n\nNo further action is needed.\n\n## [FINAL REPORT]\n\nDetails.\n';
+  const devlog_text = `${devlog_with_ask('A-001')}\n# ← Reply / A-001\n\n${reply}`;
+  const summary = require('./round-linter').reply_summary_text(reply);
+  const visible = lint_round({ devlog_text, terminal_output: `${summary}\n\ndevlog.md updated` });
+  const hidden = lint_round({ devlog_text, terminal_output: 'devlog.md updated' });
+  node_assert.strictEqual(status_for(visible, 'terminal_one_line').status, 'pass');
+  node_assert.strictEqual(status_for(hidden, 'terminal_one_line').status, 'fail');
+  node_assert.match(status_for(hidden, 'terminal_one_line').detail, /omits or changes the saved SUMMARY/);
 });
 
 node_test.test('timestamps_sane passes for a recent fixed timestamp', () => {
@@ -2145,7 +2165,10 @@ ${reply_body}
 
 const valid_reply_body = `## [SUMMARY]
 
-- did the thing
+- **Status:** complete
+- **Result:** did the thing
+- **Owner action:** none
+- **Next step:** no further action is needed
 
 ## Detail
 
@@ -2161,9 +2184,10 @@ None.`;
 
 const reporting_reply_body = `## [SUMMARY]
 
-- What works: the requested reporting checks are implemented.
-- What does not work: no unrelated behavior was changed.
-- What you should do next: review the recorded verification.
+- **Status:** complete
+- **Result:** the requested reporting checks are implemented; no unrelated behavior changed.
+- **Owner action:** review the recorded verification.
+- **Next step:** review the recorded verification.
 
 ## [FINAL REPORT]
 
@@ -2357,9 +2381,11 @@ const owner_facing_reply_body = ({
   detail = '- technical detail follows'
 } = {}) => `## [SUMMARY]
 
-- ${works}
-- ${does_not_work}
-- ${next}
+- **Status:** waiting
+- **Result:** ${works}
+- **Cause:** ${does_not_work}
+- **Owner action:** ${next}
+- **Next step:** ${next}
 
 ## Detail
 
@@ -3257,19 +3283,42 @@ node_test.test('reply_structure passes for the two owner-facing headings in orde
   node_assert.strictEqual(status_for(result, 'reply_structure').status, 'pass');
 });
 
-node_test.test('reply_structure warns on a prose Summary and accepts plain result bullets', () => {
-	const prose = `## [SUMMARY]\n\nThe work is done, but this paragraph repeats the final report.\n\n## Questions (batched — each with a suggested default)\n\n- None.`;
+node_test.test('reply_structure fails a completed stop summary when required fields are missing', () => {
+  const body = `## [SUMMARY]\n\n- The work is complete.\n\n## Questions (batched — each with a suggested default)\n\n- None.`;
+  const result = lint_round({ devlog_text: devlog_ending_in_scaffold(body) });
+
+  node_assert.strictEqual(status_for(result, 'reply_structure').status, 'fail');
+  node_assert.match(status_for(result, 'reply_structure').detail, /stop SUMMARY is missing Status, Result, Owner action, Next step/);
+});
+
+node_test.test('reply_structure requires Cause for an incomplete stop summary', () => {
+  const body = `## [SUMMARY]\n\n- **Status:** waiting\n- **Result:** the task remains unfinished\n- **Owner action:** provide the requested decision\n- **Next step:** resume after the decision\n\n## Questions (batched — each with a suggested default)\n\n- None.`;
+  const result = lint_round({ devlog_text: devlog_ending_in_scaffold(body) });
+
+  node_assert.strictEqual(status_for(result, 'reply_structure').status, 'fail');
+  node_assert.match(status_for(result, 'reply_structure').detail, /missing Cause or Error or blocker/);
+});
+
+node_test.test('reply_structure accepts a concise blocked summary with all actionable fields', () => {
+  const body = `## [SUMMARY]\n\n- **Status:** blocked\n- **Result:** the requested commit is not created\n- **Cause:** Git reports EROFS for the shared metadata directory\n- **Owner action:** make that metadata path writable\n- **Next step:** retry the scoped commit after the path is writable\n\n## Questions (batched — each with a suggested default)\n\n- None.`;
+  const result = lint_round({ devlog_text: devlog_ending_in_scaffold(body) });
+
+  node_assert.strictEqual(status_for(result, 'reply_structure').status, 'pass');
+});
+
+node_test.test('reply_structure warns on a prose Summary and accepts labeled stop fields', () => {
+	const prose = `## [SUMMARY]\n\nStatus: complete\n\nResult: the work is done.\n\nOwner action: none\n\nNext step: no further action is needed.\n\n## Questions (batched — each with a suggested default)\n\n- None.`;
 	const warned = lint_round({ devlog_text: devlog_ending_in_scaffold(prose) });
 	node_assert.strictEqual(status_for(warned, 'reply_structure').status, 'warn');
 	node_assert.match(status_for(warned, 'reply_structure').detail, /Summary.*bullet|prose/i);
 
-	const concise = `## [SUMMARY]\n\n- Writer added. Replies now target an exact Ask.\n\n- Checks passed.\n\n## Questions (batched — each with a suggested default)\n\n- None.`;
+	const concise = `## [SUMMARY]\n\n- **Status:** complete\n\n- **Result:** writer added; replies now target an exact Ask and checks passed.\n\n- **Owner action:** none\n\n- **Next step:** no further action is needed.\n\n## Questions (batched — each with a suggested default)\n\n- None.`;
 	const accepted = lint_round({ devlog_text: devlog_ending_in_scaffold(concise) });
 	node_assert.strictEqual(status_for(accepted, 'reply_structure').status, 'pass');
 });
 
 node_test.test('reply_structure accepts more than three Summary bullets', () => {
-	const body = `## [SUMMARY]\n\n- One.\n\n- Two.\n\n- Three.\n\n- Four.\n\n## Questions (batched — each with a suggested default)\n\n- None.`;
+	const body = `## [SUMMARY]\n\n- **Status:** complete\n\n- **Result:** one.\n\n- Two.\n\n- Three.\n\n- Four.\n\n- **Owner action:** none\n\n- **Next step:** no further action is needed.\n\n## Questions (batched — each with a suggested default)\n\n- None.`;
 	const result = lint_round({ devlog_text: devlog_ending_in_scaffold(body) });
 	node_assert.strictEqual(status_for(result, 'reply_structure').status, 'pass');
 });
@@ -3277,7 +3326,10 @@ node_test.test('reply_structure accepts more than three Summary bullets', () => 
 node_test.test('reply_structure does not require audit mechanics in the owner-facing Reply', () => {
   const body = `## [SUMMARY]
 
-- did the thing
+- **Status:** complete
+- **Result:** did the thing
+- **Owner action:** none
+- **Next step:** no further action is needed
 
 ## Questions (batched — each with a suggested default)
 
@@ -3294,7 +3346,10 @@ node_test.test('reply_structure warns when the headings are out of order', () =>
 
 ## [SUMMARY]
 
-- did the thing`;
+- **Status:** complete
+- **Result:** did the thing
+- **Owner action:** none
+- **Next step:** no further action is needed`;
   const result = lint_round({ devlog_text: devlog_ending_in_scaffold(body) });
 
   node_assert.strictEqual(status_for(result, 'reply_structure').status, 'warn');
@@ -3304,7 +3359,10 @@ node_test.test('reply_structure warns when the headings are out of order', () =>
 node_test.test('reply_structure warns for the old level-three heading form', () => {
   const body = `### [SUMMARY]
 
-- did the thing
+- **Status:** complete
+- **Result:** did the thing
+- **Owner action:** none
+- **Next step:** no further action is needed
 
 ### Questions (batched — each with a suggested default)
 
@@ -3524,6 +3582,51 @@ node_test.test('direct executable work requires red-first, focused, suite, Git, 
     direct_route: reporting_direct_route_facts()
   });
   node_assert.strictEqual(status_for(complete, 'direct_route_completion')?.status, 'pass');
+});
+
+node_test.test('implementation changes require visible verified outcome coverage in the final report', () => {
+  const changed_files = ['skills/agflow-frugal/scripts/example.js'];
+  const missing = lint_round({
+    devlog_text: reporting_substantial_devlog(),
+    repository_state: { changed_files }
+  });
+  node_assert.strictEqual(status_for(missing, 'outcome_coverage')?.status, 'fail');
+
+  const table = `### Outcome coverage
+
+| Requested outcome | Delivered result | Evidence | Status |
+| --- | --- | --- | --- |
+| Save the requested setting | The setting is saved | Focused test and read-back | Verified |`;
+  const report_with_coverage = reporting_reply_body.replace('## Verification, route, and mechanics', `${table}\n\n## Verification, route, and mechanics`);
+  const covered = lint_round({
+    devlog_text: reporting_substantial_devlog(report_with_coverage),
+    repository_state: { changed_files }
+  });
+  node_assert.strictEqual(status_for(covered, 'outcome_coverage')?.status, 'pass', status_for(covered, 'outcome_coverage')?.detail);
+
+  const unproven = lint_round({
+    devlog_text: reporting_substantial_devlog(report_with_coverage.replace('Verified', 'Not proven')),
+    repository_state: { changed_files }
+  });
+  node_assert.strictEqual(status_for(unproven, 'outcome_coverage')?.status, 'fail');
+  node_assert.match(status_for(unproven, 'outcome_coverage')?.detail, /not proven/i);
+
+  for (const example of [
+    report_with_coverage.replace(/^\|/gmu, '> |'),
+    report_with_coverage.replace(table, `\`\`\`md\n${table}\n\`\`\``)
+  ]) {
+    const quoted = lint_round({
+      devlog_text: reporting_substantial_devlog(example),
+      repository_state: { changed_files }
+    });
+    node_assert.strictEqual(status_for(quoted, 'outcome_coverage')?.status, 'fail');
+  }
+
+  const no_code_change = lint_round({
+    devlog_text: reporting_substantial_devlog(),
+    repository_state: { changed_files: ['notes.md'] }
+  });
+  node_assert.strictEqual(status_for(no_code_change, 'outcome_coverage')?.status, 'skip');
 });
 
 node_test.test('separates behavior, evidence-origin, and cosmetic record defects', () => {
@@ -4333,13 +4436,13 @@ node_test.test('cosmetic checkpoint labels do not substitute for factual scope e
 
 node_test.test('cosmetic Reply heading variants are advisory while empty content still blocks', () => {
   const variants = [
-    '### Summary\n\nCompleted the requested fix.\n\n### Final report\n\nThe regression passed; no limitation remains.\n\n### Questions\n\n- None.',
-    '## Questions (batched — each with a suggested default)\n\n- None.\n\n## [FINAL REPORT]\n\nThe regression passed.\n\n## [SUMMARY]\n\n- Completed.',
+    '### Summary\n\n- **Status:** complete\n- **Result:** completed the requested fix; the regression passed.\n- **Owner action:** none\n- **Next step:** no further action is needed.\n\n### Final report\n\nThe regression passed; no limitation remains.\n\n### Questions\n\n- None.',
+    '## Questions (batched — each with a suggested default)\n\n- None.\n\n## [FINAL REPORT]\n\nThe regression passed.\n\n## [SUMMARY]\n\n- **Status:** complete\n- **Result:** the regression passed.\n- **Owner action:** none\n- **Next step:** no further action is needed.',
     'Completed the requested fix; the regression passed. There are no remaining questions.'
   ];
   for (const body of variants) {
     const result = lint_round({ devlog_text: devlog_ending_in_scaffold(body), substantial: true });
-    node_assert.equal(status_for(result, 'reply_structure').status, 'warn', body);
+    node_assert.equal(status_for(result, 'reply_structure').status, body.startsWith('Completed') ? 'fail' : 'warn', body);
   }
   const empty = lint_round({ devlog_text: devlog_ending_in_scaffold('### Summary\n\n### Final report\n\nDone.\n\n### Questions\n\n- None.') });
   node_assert.equal(status_for(empty, 'reply_structure').status, 'fail');
@@ -4363,11 +4466,12 @@ node_test.test('cosmetic STATUS ordering punctuation and separator are advisory'
   node_assert.equal(status_for(lint_round({ devlog_text: text.replace('Notebook: devlog.md — root', 'Notebook: ../foreign.md — root'), require_status_projection: true }), 'status_projection_valid').status, 'fail');
 });
 
-node_test.test('cosmetic terminal wording and empty Ask marker do not block saved work', () => {
-  const result = lint_round({ devlog_text: devlog_ending_in_scaffold('## [SUMMARY]\n\n- Done.\n\n## Questions (batched — each with a suggested default)\n\n- None.').replace(/\+\s*$/u, ''), terminal_output: 'Saved the report in devlog.md.', now_ms: fixed_now_ms });
-  node_assert.equal(status_for(result, 'terminal_one_line').status, 'warn');
+node_test.test('a visible closeout that omits the saved stop summary blocks completion', () => {
+  const summary = `## [SUMMARY]\n\n- **Status:** complete\n- **Result:** done\n- **Owner action:** none\n- **Next step:** no further action is needed\n\n## Questions (batched — each with a suggested default)\n\n- None.`;
+  const result = lint_round({ devlog_text: devlog_ending_in_scaffold(summary).replace(/\+\s*$/u, ''), terminal_output: 'Saved the report in devlog.md.', now_ms: fixed_now_ms });
+  node_assert.equal(status_for(result, 'terminal_one_line').status, 'fail');
   node_assert.equal(status_for(result, 'next_ask_scaffold').status, 'warn');
-  node_assert.equal(result.ok, true, JSON.stringify(result.checks));
+  node_assert.equal(result.ok, false, JSON.stringify(result.checks));
 });
 
 node_test.test('cosmetic host-review Markdown keeps the mandatory verdict and conflicting-result checks', () => {
@@ -4404,7 +4508,7 @@ node_test.test('cosmetic reporting warnings cannot bypass missing trusted covera
 });
 
 node_test.test('cosmetic nested report headings retain substantive body content', () => {
-  const body = '## [SUMMARY]\n\n- Done.\n\n## [FINAL REPORT]\n\n### Requested fix\n\nThe requested fix passed its regression.\n\n## Questions (batched — each with a suggested default)\n\n- None.';
+  const body = '## [SUMMARY]\n\n- **Status:** complete\n- **Result:** the requested fix passed its regression.\n- **Owner action:** none\n- **Next step:** no further action is needed.\n\n## [FINAL REPORT]\n\n### Requested fix\n\nThe requested fix passed its regression.\n\n## Questions (batched — each with a suggested default)\n\n- None.';
   const result = lint_round({ devlog_text: devlog_ending_in_scaffold(body), substantial: true });
   node_assert.notEqual(status_for(result, 'reply_structure').status, 'fail');
 });

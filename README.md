@@ -1,4 +1,4 @@
-# Agentflow Frugal v8.4.0
+# Agentflow Frugal v8.5.0
 
 **English** · [繁體中文](README.zh-tw.md)
 
@@ -7,6 +7,8 @@ Give your AI assistant a project notebook, so tomorrow’s conversation can pick
 Agentflow Frugal is a fork based on upstream Agentflow v8.3.3. It adds an opt-in, compatibility-first Frugal policy for ChatGPT Plus usage. It routes bounded verified work directly to Light, keeps genuine reasoning in one Medium context, limits delegation and review, and reserves Debate for exceptional material disagreement. See [the implemented profile and measurement model](Task.md).
 
 Agentflow has verified integrations for **Codex and Claude Code** and a portable core for any host that provides file and command tools plus enough state retention for capture and closeout. It keeps your requests, decisions, progress, and results in a readable file. You can use it to improve a document, fix a bug, or carry a larger project across several sessions.
+
+**Platform compatibility:** Keep Agentflow's functions usable across popular AI platforms. Do not make core behavior depend on one platform's dedicated mechanism; use shared, portable interfaces and fallbacks.
 
 - **Start simply:** Type `godev`, then describe the task in your own words.
 

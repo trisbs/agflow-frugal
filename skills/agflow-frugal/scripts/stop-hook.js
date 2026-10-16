@@ -86,13 +86,15 @@ const write_trace_mode = (project_dir, enabled) => {
 const trace_mode_notice = (enabled, failed = false) => {
   if (failed) return {
     systemMessage: 'AGF TRACE MODE — CHANGE FAILED',
-    traceContext: 'The requested persistent trace-mode change failed. Do not claim that tracing was enabled or disabled; report that the local mode could not be updated.',
+    traceContext: 'The requested persistent trace-mode change failed. Keep the last successful session trace state. Do not claim that tracing was enabled or disabled; report that the local mode could not be updated.',
   };
   return {
     systemMessage: enabled
       ? 'AGF TRACE MODE — ENABLED\nApplies to later Codex prompts in this checkout until `godev trace disable`. Adds approximately 40–70 tokens per traced prompt; no extra model call.'
       : 'AGF TRACE MODE — DISABLED\nLater prompts in this checkout will not include persistent trace context.',
-    traceContext: `The owner changed persistent trace mode to ${enabled ? 'enabled' : 'disabled'}. This control prompt itself is not traced. Confirm the setting and its scope; do not classify this control as an ordinary task.`,
+    traceContext: `${enabled
+      ? 'Retain trace=on in this session; this successful toggle replaces earlier trace instructions. Trace later prompts using their current hook model.'
+      : 'Retain trace=off in this session; this successful toggle replaces earlier trace instructions. Do not print task/model trace on this response or later responses until a successful enable.'} This control prompt itself is not traced. Confirm the setting and its checkout scope; do not classify this control as an ordinary task.`,
   };
 };
 
@@ -148,14 +150,16 @@ const parse_json = text => {
 };
 
 let capturing_prompt = false;
+let hook_event_receipt = null;
+let hook_event_outcome = 'completed';
 
-const main = () => {
-  const input = parse_json(read_stdin());
+const main = (input = parse_json(read_stdin())) => {
   capturing_prompt = input.hook_event_name === 'UserPromptSubmit';
+  const retry_guard = input.stop_hook_active === true && input.hook_event_name !== 'UserPromptSubmit';
 
-  // Loop guard comes before host validation so a correcting turn launched by an
-  // older, host-neutral installed command can still escape the one-retry cycle.
-  if (input.stop_hook_active === true) return 0;
+  // Preserve the old host-neutral retry escape. Current installed commands carry
+  // --host, so their single retry can still be checked and recorded below.
+  if (retry_guard && process.argv.indexOf('--host') < 0) return 0;
 
   const external_delegate_marker = process.env.AGENTFLOW_EXTERNAL_DELEGATE;
   // A command-scoped delegate must not be mistaken for an owner round. The
@@ -172,7 +176,7 @@ const main = () => {
   }
 
   // Exact help requests are informational controls, not notebook input. Handle
-  // them before resolving configuration or reading any notebook/owner state.
+  // them before resolving configuration or reading notebook/owner state.
   if (input.hook_event_name === 'UserPromptSubmit' && help_prompt(input.prompt)) {
     process.stdout.write(JSON.stringify({
       systemMessage: help_usage,
@@ -186,6 +190,11 @@ const main = () => {
 
   // CLAUDE_PROJECT_DIR is Claude-Code-only; every host passes cwd on stdin.
   const project_dir = (active_host === 'claude' ? process.env.CLAUDE_PROJECT_DIR : '') || input.cwd || process.cwd();
+	try { hook_event_receipt = require('./hook-events').begin({ root: project_dir, input, host: active_host }) } catch (error) {
+		hook_event_receipt = null
+		process.stderr.write(`Agentflow hook event receipt unavailable; continuing without correlation evidence: ${error.message}\n`)
+	}
+  if (retry_guard) hook_event_outcome = 'stop_retry_unchecked';
   let notebook_path = '.agentflow/devlog.md';
   let config_path = node_path.join(project_dir, 'ag.json');
   const project_name = node_path.basename(project_dir);
@@ -220,6 +229,7 @@ const main = () => {
   // clean folder without an Agentflow notebook. Other hook behavior still
   // requires a configured devlog.
   if (!node_fs.existsSync(devlog_path)) {
+		hook_event_outcome = 'no_notebook';
     if (input.hook_event_name === 'UserPromptSubmit' && (trace.systemMessage || trace.traceContext)) {
       process.stdout.write(JSON.stringify({ ...(trace.systemMessage ? { systemMessage: trace.systemMessage } : {}), hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
@@ -233,6 +243,7 @@ const main = () => {
     const status = status_context(input);
     const current = parse_devlog(node_fs.readFileSync(devlog_path, 'utf8')).rounds.at(-1);
     if (!current || current.reply_text.trim()) {
+			hook_event_outcome = 'capture_not_saved';
       // Missing bookkeeping must not prevent the owner from requesting repair.
       // Leave history and ownership untouched; the agent receives the prompt.
       process.stdout.write(JSON.stringify({ ...(trace.systemMessage ? { systemMessage: trace.systemMessage } : {}), hookSpecificOutput: {
@@ -251,6 +262,7 @@ const main = () => {
       });
     } catch (error) {
       if (error.code !== 'AG_NOTEBOOK_OWNER') throw error;
+			hook_event_outcome = 'capture_owner_conflict';
       // Refuse unauthorized notebook writes, not delivery of the owner's request.
       const continuing_native_task = ['codex', 'claude'].includes(active_host) && /^\s*\/?godev(?:\s|$)/iu.test(String(input.prompt || '')) && /belongs to (?:codex|claude) session/u.test(error.message);
       const ownership_guidance = continuing_native_task
@@ -262,6 +274,7 @@ const main = () => {
       } }) + '\n');
       return 0;
     }
+		hook_event_outcome = result.inserted ? 'capture_saved' : 'capture_duplicate';
     const round = parse_devlog(node_fs.readFileSync(devlog_path, 'utf8')).rounds.at(-1);
     const fast_lane = require('./fast-lane.js').parse_fast_lane(round?.owner_text);
     const route_notice = fast_lane ? ` Fast-lane ${fast_lane.state}: work directly without AG, delegation, new streams, external review, or pipeline approval/artifact requirements. Keep host self-review, necessary tests, trackers, timed WIP checkpoints, detailed reports, and integrity checks. ${fast_lane.state === 'pending' ? 'Wait for the task; leave this Ask open without a Reply or closeout.' : 'This applies through this task’s closeout, then expires.'}` : '';
@@ -276,7 +289,10 @@ const main = () => {
 
   const devlog_text = node_fs.readFileSync(devlog_path, 'utf8');
   const rounds = parse_devlog(devlog_text).rounds;
-  if (rounds.length === 1 && ['', '+'].includes(rounds[0].ask_text.trim()) && !rounds[0].reply_text.trim() && !rounds[0].wip_text.trim()) return 0;
+	if (rounds.length === 1 && ['', '+'].includes(rounds[0].ask_text.trim()) && !rounds[0].reply_text.trim() && !rounds[0].wip_text.trim()) {
+		hook_event_outcome = 'stop_skipped';
+		return 0;
+	}
   const context = collect({
     project_root: project_dir,
     notebook_path,
@@ -284,12 +300,27 @@ const main = () => {
     active_host,
     devlog_text,
     transcript_path: input.transcript_path,
+    last_assistant_message: input.last_assistant_message,
+    stop_event: input.hook_event_name !== 'UserPromptSubmit',
     require_status_projection: true,
     now_ms: Date.now()
   });
   const result = lint_round(context);
 
+  if (retry_guard) {
+    const report_check = result.checks.find(check => check.id === 'active_stop_report');
+    if (report_check?.status === 'fail') {
+      hook_event_outcome = 'stop_retry_report_failed';
+      // The single correction already ran. Record a failed retry without
+      // exposing another checker message or starting a correction loop.
+    } else if (report_check?.status === 'pass') {
+      hook_event_outcome = 'stop_retry_passed';
+    }
+    return 0;
+  }
+
   if (result.ok) {
+		hook_event_outcome = 'stop_passed';
     const cleanup = require('./completion-cleanup').sweep_completion_records({ project_root: project_dir, notebook_path, config_path });
     if (cleanup.status === 'error') process.stderr.write('Agentflow completion cleanup skipped: ' + cleanup.reason + '\n');
     return 0;
@@ -298,14 +329,24 @@ const main = () => {
   const parsed = parse_devlog(devlog_text);
   const current_round = parsed.rounds.filter(round => round.text === parsed.last_round).at(-1);
   const active_round = current_round !== undefined && current_round.reply_text.trim() === '';
+  // A Codex Stop block turns its reason into a user-visible continuation prompt.
+  // Keep stop-report validation diagnostic-only so internal formatting feedback
+  // is never injected into the user's chat. Other active-round invariants remain
+  // blocking as before.
   const active_blocking_ids = new Set(['round_boundaries', 'configuration_valid']);
   const failed = result.checks.filter(check => check.status === 'fail' && (!active_round || active_blocking_ids.has(check.id)));
   if (failed.length === 0) {
-    const warnings = result.checks.filter(check => check.status === 'fail');
-    process.stderr.write('Agentflow active-round warning — editable progress records need attention:\n');
-    warnings.forEach(check => process.stderr.write(`  - ${check.id}: ${check.detail}\n`));
+		hook_event_outcome = result.checks.some(check => check.id === 'active_stop_report' && check.status === 'fail')
+			? 'stop_report_incomplete'
+			: 'stop_warning';
+    const warnings = result.checks.filter(check => check.status === 'fail' && check.id !== 'active_stop_report');
+    if (warnings.length > 0) {
+      process.stderr.write('Agentflow active-round warning — editable progress records need attention:\n');
+      warnings.forEach(check => process.stderr.write(`  - ${check.id}: ${check.detail}\n`));
+    }
     return 0;
   }
+	hook_event_outcome = 'stop_blocked';
   process.stderr.write('Agentflow round-linter blocked this round — a checked rule was broken:\n');
   failed.forEach(check => process.stderr.write(`  - ${check.id}: ${check.detail}\n`));
   process.stderr.write('Keep the current round open, fix these facts, and run the completion check again.\n');
@@ -315,8 +356,9 @@ const main = () => {
 // Fail-open: a bug in the referee must never brick the owner session.
 let exit_code = 0;
 try {
-  exit_code = main();
+	exit_code = main(parse_json(read_stdin()));
 } catch (error) {
+	hook_event_outcome = 'hook_error';
   // Logging infrastructure must not prevent the owner from requesting repair.
   process.stderr.write(`Agentflow hook error: ${error.message}\n`);
   if (capturing_prompt) process.stdout.write(JSON.stringify({ hookSpecificOutput: {
@@ -324,6 +366,15 @@ try {
     additionalContext: `Automatic notebook capture did not complete. Continue with the submitted request, including any no-ag instruction. The instruction may already be saved if a later step failed; inspect the current Ask before retrying capture. Preserve history, existing locks and other sessions' ownership; do not force a notebook write or ownership takeover. Diagnostic: ${error.message}. Do not record this hook notice as user input.`,
   } }) + '\n');
   exit_code = 0;
+}
+
+if (hook_event_receipt) {
+	const state = hook_event_outcome === 'hook_error' || hook_event_outcome === 'stop_retry_report_failed'
+		? 'failed'
+		: exit_code === 2 ? 'blocked' : 'completed';
+	if (!require('./hook-events').finish(hook_event_receipt, { state, outcome: hook_event_outcome })) {
+		process.stderr.write('Agentflow hook event receipt could not record completion; the hook result above remains authoritative.\n')
+	}
 }
 
 process.exit(exit_code);

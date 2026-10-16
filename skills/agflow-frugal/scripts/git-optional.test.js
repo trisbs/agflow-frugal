@@ -47,7 +47,7 @@ const fixture = t => {
   const manifest = {
     version: 1, notebook: status.notebook, ask: 'A-001', status,
     run_events: ['- Saved result.txt and verified its contents.'],
-    reply: '## [SUMMARY]\n\n- Saved the local artifact.\n\n## [FINAL REPORT]\n\n1. Save a local artifact.\n\n   - Succeeded and checked the saved content.\n\n```completion-metadata\nInformational document: result.txt — standalone non-executable text artifact\n```\n',
+    reply: '## [SUMMARY]\n\n- Status: complete.\n- Result: saved the local artifact and checked its content.\n- Owner action: none.\n- Next step: none.\n\n## [FINAL REPORT]\n\n1. Save a local artifact.\n\n   - Succeeded and checked the saved content.\n\n```completion-metadata\nInformational document: result.txt — standalone non-executable text artifact\n```\n',
     allowed_paths: [status.notebook, 'ag.json', tracker_path, 'result.txt'],
     commit_message: 'save local artifact', delivery: { mode: 'local' },
   };

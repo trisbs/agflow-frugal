@@ -83,5 +83,6 @@ test('real terminal verifies owner refusal, hash-checked handoff and oversized n
   assert.match(fs.readFileSync(file, 'utf8'), /accepted after handoff/);
   assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /foreign marker|stale owner marker/);
   assert.ok(fs.readdirSync(path.join(root, '.agentflow/.tmp')).some(name => name.startsWith('agentflow-input-codex-')));
-  assert.equal(fs.readdirSync(path.join(root, '.codex')).some(name => name.startsWith('agentflow-input-')), false);
+  const host_config = path.join(root, '.codex');
+  assert.equal(fs.existsSync(host_config) && fs.readdirSync(host_config).some(name => name.startsWith('agentflow-input-')), false);
 });

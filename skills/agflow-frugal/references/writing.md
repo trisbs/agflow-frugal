@@ -24,11 +24,19 @@
 
 - Keep essential evidence beside its conclusion; put formulas, hashes, raw paths, process and scope accounting, repair history, and other lengthy technical detail after it or in links.
 
+- When source, test, or skill-instruction files change, include exactly one `### Outcome coverage` table in the final report, with `Requested outcome`, `Delivered result`, `Evidence`, and `Status` columns. Include each material requested outcome. Mark a row `Verified` only after comparing the result with the current Ask and changed behavior and inspecting its evidence; use `Not proven` for unmet or uncertain outcomes and keep the task open. The Stop hook checks that the table is present and complete, while the host checks that its claims are true. Tests prove only the behavior they exercise. Keep the table concise; add no model call, reviewer, or separate artifact.
+
 - Distinguish tests running, requested behavior working, and task completion; separate earlier from current results. State uncertainty plainly. When shortening, keep material failures and limitations.
 
 - In findings and closing limits, separate trigger, impact, evidence, and action when distinct. Preserve exact verdict fields, severity, IDs, uncertainty, literal patch blocks, and final `Self-check:` boundaries.
 
 - Before delivery, check the opening against these rules and confirm the reader could explain the conclusion and next step in their own words. This check and all presentation choices are advisory, never automated completion gates, and never replace required content, evidence, or established formats.
+
+## Owner design review briefs
+
+- Before requesting `Design Go` for an owner-requested design, put a concise `## Review brief` in the devlog Reply and link the full `design.md`. Cover **Goal**, **Requirement coverage** (each owner-stated requirement → planned action → acceptance proof), **Key differences** from the request or current behavior and their effects (or `None`), **Open decisions** (only unresolved choices, with a recommended default and its consequence), **Risks and limits**, and **Approval effect** (the exact work `Design Go` authorizes).
+
+- Keep the brief decision-focused and scale it to the design. For a simple task, combine related points and omit empty sections, but keep Key differences and Approval effect explicit. Reuse the devlog Reply and existing design; do not create a separate review artifact or replace the design's full invariants and acceptance criteria.
 
 ## Research reports
 

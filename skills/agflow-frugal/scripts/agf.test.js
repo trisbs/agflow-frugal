@@ -14,6 +14,7 @@ const ownership_fixture = require('./fixtures/notebook-owner')
 ownership_fixture.configure()
 process.env.AGF_TEST_CONTEXT = '1'
 const install_hook = require('./install-hook.js')
+const resume_intake = require('./resume-intake.js')
 const { format_local_timestamp } = require('./local-time.js')
 
 test('complete output retries when a write accepts only part of the text', () => {
@@ -35,6 +36,45 @@ test('parse_close_args requires one manifest stdin and keeps push authority sepa
 	assert.deepEqual(agf.parse_close_args(['--manifest-stdin', '--push-authorized']), { help: false, manifest_stdin: true, push_authorized: true })
 	assert.match(agf.parse_close_args([]).error, /manifest-stdin/)
 	assert.match(agf.parse_close_args(['--manifest-stdin', '--push-authorized', '--push-authorized']).error, /duplicate/)
+})
+
+test('Git metadata preflight removes its temporary write probe', () => {
+  const writes = []
+  const removals = []
+  const result = agf.probe_git_metadata_write('/repo', {
+    run_git: () => ({ ok: true, out: '/repo/.git' }),
+    filesystem: {
+      writeFileSync: (file, _contents, options) => writes.push([file, options]),
+      unlinkSync: file => removals.push(file),
+    },
+    nonce: 'probe-id',
+  })
+  assert.equal(result.ok, true)
+  assert.equal(writes[0][0], '/repo/.git/.agf-write-probe-probe-id')
+  assert.deepEqual(writes[0][1], { flag: 'wx', mode: 0o600 })
+  assert.deepEqual(removals, [writes[0][0]])
+})
+
+test('Git metadata preflight reports a read-only metadata directory before mutation', () => {
+  const error = Object.assign(new Error('read-only file system'), { code: 'EROFS' })
+  const result = agf.probe_git_metadata_write('/repo', {
+    run_git: () => ({ ok: true, out: '/repo/.git' }),
+    filesystem: { writeFileSync: () => { throw error }, unlinkSync: () => assert.fail('no probe file was created') },
+    nonce: 'probe-id',
+  })
+  assert.equal(result.ok, false)
+  assert.match(result.detail, /EROFS.*read-only/i)
+})
+
+test('Git metadata preflight distinguishes missing Git from read-only metadata', () => {
+  const result = agf.probe_git_metadata_write('/repo', {
+    run_git: () => ({ ok: false, out: 'spawnSync git ENOENT' }),
+    filesystem: { writeFileSync: () => assert.fail('no probe when Git is missing'), unlinkSync: () => {} },
+    nonce: 'probe-id',
+  })
+  assert.equal(result.ok, false)
+  assert.equal(result.code, 'git_unavailable')
+  assert.match(result.detail, /Git executable.*not found/i)
 })
 
 test('route parser accepts only the documented CLI forms', () => {
@@ -219,6 +259,57 @@ test('start combines initialization, exact owner input, intake, and structured J
 		assert.match(plain.stderr, /ready:|notebook:|stream decision:/i)
 	} finally {
 		fs.rmSync(dir, { recursive: true, force: true })
+	}
+})
+
+test('start completes and records input when the project hook config is read-only', () => {
+	const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agf-start-readonly-hooks-')))
+	execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir })
+	const project_skill = path.join(dir, 'skills', 'agflow-frugal')
+	fs.mkdirSync(path.dirname(project_skill), { recursive: true })
+	fs.cpSync(path.resolve(__dirname, '..'), project_skill, { recursive: true })
+	const hook_path = path.join(dir, '.codex', 'hooks.json')
+	fs.mkdirSync(path.dirname(hook_path), { recursive: true })
+	fs.writeFileSync(hook_path, '{"hooks":{}}\n', { mode: 0o444 })
+	try {
+		const result = spawnSync(process.execPath, [path.join(project_skill, 'scripts', 'agf.js'), 'start', '--repo', dir, '--host', 'codex', '--message-stdin', '--json'], {
+			cwd: dir, input: 'resume despite read-only hooks\n', encoding: 'utf8',
+		})
+		assert.equal(result.status, 0, result.stderr)
+		const output = JSON.parse(result.stdout)
+		assert.equal(output.message.inserted, true)
+		assert.equal(output.hooks.status, 'missing')
+		assert.equal(output.hooks.config_path, hook_path)
+		assert.equal(fs.readFileSync(hook_path, 'utf8'), '{"hooks":{}}\n')
+		assert.match(fs.readFileSync(path.join(dir, '.agentflow/devlog.md'), 'utf8'), /resume despite read-only hooks/u)
+	} finally { fs.chmodSync(hook_path, 0o644); fs.rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('global skill startup from a clean unrelated repository uses the disposable global hook only', () => {
+	const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agf-global-home-')))
+	const clean = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agf-global-clean-')))
+	const global_skill = path.join(home, '.agents', 'skills', 'agflow-frugal')
+	fs.mkdirSync(path.dirname(global_skill), { recursive: true })
+	fs.cpSync(path.resolve(__dirname, '..'), global_skill, { recursive: true })
+	execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: clean })
+	const env = { ...process.env, HOME: home, USERPROFILE: home }
+	try {
+		execFileSync(process.execPath, [path.join(global_skill, 'scripts', 'install-hook.js'), '--global', '--host', 'codex', '--quiet'], { cwd: clean, env, stdio: 'pipe' })
+		const global_hooks = path.join(home, '.codex', 'hooks.json')
+		const original = fs.readFileSync(global_hooks, 'utf8')
+		const result = spawnSync(process.execPath, [path.join(global_skill, 'scripts', 'agf.js'), 'start', '--repo', clean, '--host', 'codex', '--message-stdin', '--json'], {
+			cwd: clean, env, input: 'global install works here\n', encoding: 'utf8',
+		})
+		assert.equal(result.status, 0, result.stderr)
+		const output = JSON.parse(result.stdout)
+		assert.equal(output.message.inserted, true)
+		assert.equal(Object.hasOwn(output, 'hooks'), false, 'the global hook should be recognized as available')
+		assert.equal(fs.readFileSync(global_hooks, 'utf8'), original, 'startup must not rewrite the global hook config')
+		assert.equal(fs.existsSync(path.join(clean, '.codex', 'hooks.json')), false, 'global install must not create project host settings')
+		assert.match(fs.readFileSync(path.join(clean, '.agentflow', 'devlog.md'), 'utf8'), /global install works here/u)
+	} finally {
+		fs.rmSync(home, { recursive: true, force: true })
+		fs.rmSync(clean, { recursive: true, force: true })
 	}
 })
 
@@ -460,7 +551,7 @@ test('start refuses an invalid established configuration and a missing establish
 	fs.rmSync(outside, { recursive: true, force: true })
 })
 
-test('start keeps an interrupted startup conservative when its lock is still present', () => {
+test('start preserves an unverified legacy startup lock and reports its uncertain state', () => {
 	const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agf-start-interrupted-')))
 	execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir })
 	execFileSync('git', ['config', 'user.email', 'test@example.invalid'], { cwd: dir })
@@ -478,10 +569,290 @@ test('start keeps an interrupted startup conservative when its lock is still pre
 		const output = JSON.parse(result.stdout)
 		assert.equal(output.message.inserted, false)
 		assert.equal(output.stream_decision.reason, 'foreign_or_parallel_work')
-		assert.match(output.stream_decision.evidence.join(' '), /startup did not return/i)
+		assert.match(output.stream_decision.evidence.join(' '), /prior startup changes cannot be attributed/i)
+		assert.match(output.message.retry_instruction, /recovery is not safe.*This retry did not write.*Inspect/u)
+		assert.equal(fs.existsSync(path.join(dir, '.agentflow-start.lock')), true)
 		assert.match(fs.readFileSync(path.join(dir, '.agentflow/devlog.md'), 'utf8'), /\n\n\+ ?\n$/)
 	} finally {
 		fs.rmSync(dir, { recursive: true, force: true })
+	}
+})
+
+test('start explains an active lock when an interrupted setup left intake settings unavailable', () => {
+	const { dir } = make_repo({ prefix: 'agf-start-active-incomplete-' })
+	try {
+		const lock = { type: 'agentflow_start_lock', version: 1, pid: process.pid, started_at: '2026-10-14 12:00:00 +0800', repository: dir, token: 'c'.repeat(32) }
+		fs.writeFileSync(path.join(dir, '.agentflow-start.lock'), `${JSON.stringify(lock)}\n`)
+		const result = spawnSync(process.execPath, [path.join(__dirname, 'agf.js'), 'start', '--repo', dir, '--host', 'codex', '--message-stdin', '--json'], {
+			cwd: dir, input: 'Wait for startup recovery\n', encoding: 'utf8',
+		})
+		assert.notEqual(result.status, 0)
+		assert.match(result.stderr, /lock is unresolved.*intake could not read.*settings.*process is still present/u)
+		assert.equal(fs.existsSync(path.join(dir, '.agentflow-start.lock')), true)
+		assert.equal(fs.existsSync(path.join(dir, '.agentflow/devlog.md')), false)
+	} finally {
+		drop(dir)
+	}
+})
+
+test('start reports a stale recovery guard before the missing notebook pair error', () => {
+	const { dir } = make_repo({ prefix: 'agf-start-stale-guard-' })
+	try {
+		fs.unlinkSync(path.join(dir, 'devlog.md'))
+		const guard = { type: 'agentflow_start_recovery', version: 1, pid: 2147483647, started_at: '2026-10-14 12:00:01 +0800', repository: dir, token: '9'.repeat(32) }
+		fs.writeFileSync(path.join(dir, '.agentflow-start.recovery.lock'), `${JSON.stringify(guard)}\n`)
+		const result = spawnSync(process.execPath, [path.join(__dirname, 'agf.js'), 'start', '--repo', dir, '--host', 'codex', '--message-stdin', '--json'], {
+			cwd: dir, input: 'Recover after guard review\n', encoding: 'utf8',
+		})
+		assert.notEqual(result.status, 0)
+		assert.match(result.stderr, /lock is unresolved.*recovery_guard_unverified.*remove only this guard/u)
+		assert.equal(fs.existsSync(path.join(dir, 'devlog.md')), false)
+		assert.equal(fs.existsSync(path.join(dir, '.agentflow-start.recovery.lock')), true)
+	} finally {
+		drop(dir)
+	}
+})
+
+test('start explains a recovery guard left by hard process termination', () => {
+	const { dir, run } = make_repo({ prefix: 'agf-start-guard-crash-' })
+	const preload = path.join(os.tmpdir(), `agf-start-guard-crash-${process.pid}.js`)
+	try {
+		fs.appendFileSync(path.join(dir, 'devlog.md'), '\n---\n\n# → Ask / A-001\n\n+\n')
+		run(['add', 'devlog.md'])
+		run(['commit', '-m', 'prepare recovery guard crash'])
+		const stale = { type: 'agentflow_start_lock', version: 1, pid: 2147483647, started_at: '2026-10-14 12:00:00 +0800', repository: dir, token: '8'.repeat(32) }
+		fs.writeFileSync(path.join(dir, '.agentflow-start.lock'), `${JSON.stringify(stale)}\n`)
+		fs.writeFileSync(preload, [
+			'const fs = require("node:fs")',
+			'const write = fs.writeFileSync',
+			'fs.writeFileSync = (file, data, ...args) => { write.call(fs, file, data, ...args); if (typeof data === "string" && data.includes("agentflow_start_recovery")) process.exit(89) }',
+		].join('\n'))
+		const args = [path.join(__dirname, 'agf.js'), 'start', '--repo', dir, '--host', 'codex', '--message-stdin', '--json']
+		const crashed = spawnSync(process.execPath, ['--require', preload, ...args], { cwd: dir, input: 'Recover after guard crash\n', encoding: 'utf8' })
+		assert.equal(crashed.status, 89)
+		const guard_path = path.join(dir, '.agentflow-start.recovery.lock')
+		assert.equal(fs.existsSync(guard_path), true)
+		const notebook_before_retry = fs.readFileSync(path.join(dir, 'devlog.md'), 'utf8')
+
+		const retried = spawnSync(process.execPath, args, { cwd: dir, input: 'Recover after guard crash\n', encoding: 'utf8' })
+		assert.equal(retried.status, 0, retried.stderr)
+		const output = JSON.parse(retried.stdout)
+		assert.match(output.message.retry_instruction, /leftover guard.*process is gone.*remove only this guard/u)
+		assert.equal(fs.existsSync(guard_path), true)
+		assert.equal(fs.readFileSync(path.join(dir, 'devlog.md'), 'utf8'), notebook_before_retry)
+	} finally {
+		fs.rmSync(preload, { force: true })
+		drop(dir)
+	}
+})
+
+test('start reclaims a dead startup lock and uses its original baseline to classify partial setup', () => {
+	const { dir, run } = make_repo({ prefix: 'agf-start-recovery-' })
+	try {
+		fs.appendFileSync(path.join(dir, 'devlog.md'), '\n---\n\n# → Ask / A-001\n\n+\n')
+		run(['add', 'devlog.md'])
+		run(['commit', '-m', 'prepare startup recovery'])
+		const paths = ['ag.json', '.gitignore', 'devlog.md', '.agentflow/devlog.md', '.codex/settings.json', '.codex/hooks.json', '.claude/settings.json']
+		const before = Object.fromEntries(paths.map(relative => [relative, resume_intake.file_identity(path.join(dir, relative))]))
+		const header = { type: 'agentflow_start_lock', version: 1, pid: 2147483647, started_at: '2026-10-14 12:00:00 +0800', repository: dir, token: 'a'.repeat(32) }
+		const journal = [header, { type: 'baseline', paths, before }, { type: 'phase', name: 'configuration_initialized' }]
+		fs.writeFileSync(path.join(dir, '.agentflow-start.lock'), `${journal.map(record => JSON.stringify(record)).join('\n')}\n`)
+		fs.writeFileSync(path.join(dir, '.gitignore'), '.claude/\n.codex/\n.worktrees/\n')
+		const result = spawnSync(process.execPath, [path.join(__dirname, 'agf.js'), 'start', '--repo', dir, '--host', 'codex', '--message-stdin', '--json'], {
+			cwd: dir, input: 'Recovered startup request\n', encoding: 'utf8',
+		})
+		assert.equal(result.status, 0, result.stderr)
+		const output = JSON.parse(result.stdout)
+		assert.equal(output.message.inserted, true)
+		assert.equal(output.stream_decision.reason, 'bootstrap_files_only')
+		assert.match(output.stream_decision.evidence.join(' '), /startup transaction identities/u)
+		assert.equal(fs.existsSync(path.join(dir, '.agentflow-start.lock')), false)
+		assert.match(fs.readFileSync(path.join(dir, 'devlog.md'), 'utf8'), /\+ Recovered startup request/u)
+	} finally {
+		drop(dir)
+	}
+})
+
+test('start resumes a canonical bootstrap interrupted after notebook creation', () => {
+	const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agf-start-bootstrap-crash-')))
+	const preload = path.join(os.tmpdir(), `agf-start-bootstrap-crash-${process.pid}.js`)
+	try {
+		execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir })
+		fs.writeFileSync(preload, [
+			'const fs = require("node:fs")',
+			'const path = require("node:path")',
+			'const rename = fs.renameSync',
+			`const target = ${JSON.stringify(path.join(dir, '.agentflow/devlog.md'))}`,
+			'fs.renameSync = (source, destination) => { rename.call(fs, source, destination); if (path.resolve(destination) === target) process.exit(86) }',
+		].join('\n'))
+		const args = [path.join(__dirname, 'agf.js'), 'start', '--repo', dir, '--host', 'codex', '--message-stdin', '--json']
+		const crashed = spawnSync(process.execPath, ['--require', preload, ...args], { cwd: dir, input: 'Recover the first startup\n', encoding: 'utf8' })
+		assert.equal(crashed.status, 86)
+		assert.equal(fs.existsSync(path.join(dir, '.agentflow/devlog.md')), true)
+		assert.equal(fs.existsSync(path.join(dir, 'ag.json')), false)
+
+		const retried = spawnSync(process.execPath, args, { cwd: dir, input: 'Recover the first startup\n', encoding: 'utf8' })
+		assert.equal(retried.status, 0, retried.stderr)
+		const output = JSON.parse(retried.stdout)
+		assert.equal(output.message.inserted, true)
+		assert.equal(output.stream_decision.reason, 'bootstrap_files_only')
+		assert.equal(fs.existsSync(path.join(dir, 'ag.json')), true)
+		assert.equal(fs.existsSync(path.join(dir, '.agentflow-start.lock')), false)
+		const notebook = fs.readFileSync(path.join(dir, '.agentflow/devlog.md'), 'utf8')
+		assert.equal((notebook.match(/\+ Recover the first startup/gu) || []).length, 1)
+	} finally {
+		fs.rmSync(preload, { force: true })
+		fs.rmSync(dir, { recursive: true, force: true })
+	}
+})
+
+test('start resumes hard termination after configuration, ignore, and owner-input writes', () => {
+	for (const phase of ['configuration', 'ignore', 'owner_input']) {
+		const existing_project = phase === 'owner_input'
+		const { dir, run } = existing_project
+			? make_repo({ prefix: `agf-start-crash-${phase}-` })
+			: { dir: fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), `agf-start-crash-${phase}-`))) }
+		const preload = path.join(os.tmpdir(), `agf-start-crash-${process.pid}-${phase}.js`)
+		try {
+			if (existing_project) {
+				fs.appendFileSync(path.join(dir, 'devlog.md'), '\n---\n\n# → Ask / A-001\n\n+\n')
+				run(['add', 'devlog.md'])
+				run(['commit', '-m', 'prepare owner-input crash'])
+			} else execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir })
+			const target = phase === 'configuration'
+				? path.join(dir, 'ag.json')
+				: phase === 'ignore'
+					? path.join(dir, '.gitignore')
+					: path.join(dir, 'devlog.md')
+			fs.writeFileSync(preload, [
+				'const fs = require("node:fs")',
+				'const path = require("node:path")',
+				'const rename = fs.renameSync',
+				`const target = ${JSON.stringify(target)}`,
+				'fs.renameSync = (source, destination) => { rename.call(fs, source, destination); if (path.resolve(destination) === target) process.exit(87) }',
+			].join('\n'))
+			const args = [path.join(__dirname, 'agf.js'), 'start', '--repo', dir, '--host', 'codex', '--message-stdin', '--json']
+			const message = phase === 'owner_input' ? 'Crash after owner input' : `Recover after ${phase}`
+			const crashed = spawnSync(process.execPath, ['--require', preload, ...args], { cwd: dir, input: `${message}\n`, encoding: 'utf8' })
+			assert.equal(crashed.status, 87, phase)
+			const retried = spawnSync(process.execPath, args, { cwd: dir, input: `${message}\n`, encoding: 'utf8' })
+			assert.equal(retried.status, 0, `${phase}: ${retried.stderr}`)
+			const output = JSON.parse(retried.stdout)
+			assert.equal(output.message.inserted, phase !== 'owner_input', phase)
+			assert.equal(fs.existsSync(path.join(dir, '.agentflow-start.lock')), false, phase)
+			assert.equal(fs.existsSync(`${path.join(dir, phase === 'owner_input' ? 'devlog.md' : '.agentflow/devlog.md')}.close-round.lock`), false, phase)
+			const notebook_path = path.join(dir, phase === 'owner_input' ? 'devlog.md' : '.agentflow/devlog.md')
+			const notebook = fs.readFileSync(notebook_path, 'utf8')
+			assert.equal((notebook.match(new RegExp(`\\+ ${message}`, 'gu')) || []).length, 1, phase)
+		} finally {
+			fs.rmSync(preload, { force: true })
+			drop(dir)
+		}
+	}
+})
+
+test('start removes only dead-owner temporary files after atomic-write termination', () => {
+	for (const phase of ['configuration', 'notebook']) {
+		const dir = phase === 'notebook'
+			? make_repo({ prefix: `agf-start-temp-crash-${phase}-` }).dir
+			: fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), `agf-start-temp-crash-${phase}-`)))
+		const run = args => execFileSync('git', args, { cwd: dir, encoding: 'utf8' })
+		const preload = path.join(os.tmpdir(), `agf-start-temp-crash-${process.pid}-${phase}.js`)
+		try {
+			let message = 'Recover after atomic temp write'
+			if (phase === 'notebook') {
+				fs.appendFileSync(path.join(dir, 'devlog.md'), '\n---\n\n# → Ask / A-001\n\n+\n')
+				run(['add', 'devlog.md'])
+				run(['commit', '-m', 'prepare notebook temp crash'])
+			} else {
+				execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir })
+				message = 'Recover after config temp write'
+			}
+			fs.writeFileSync(preload, [
+				'const fs = require("node:fs")',
+				'const write = fs.writeFileSync',
+				`const phase = ${JSON.stringify(phase)}`,
+				`const message = ${JSON.stringify(message)}`,
+				'fs.writeFileSync = (file, data, ...args) => { write.call(fs, file, data, ...args); const text = Buffer.isBuffer(data) ? data.toString("utf8") : String(data); if (phase === "configuration" ? text.includes("\\\"schema-version\\\"") : text.includes(message)) process.exit(90) }',
+			].join('\n'))
+			const args = [path.join(__dirname, 'agf.js'), 'start', '--repo', dir, '--host', 'codex', '--message-stdin', '--json']
+			const crashed = spawnSync(process.execPath, ['--require', preload, ...args], { cwd: dir, input: `${message}\n`, encoding: 'utf8' })
+			assert.equal(crashed.status, 90, `${phase}: ${crashed.stderr}`)
+			const temporary_prefix = phase === 'configuration' ? `ag.json.tmp-${crashed.pid}-` : `devlog.md.${crashed.pid}.`
+			const leftovers = fs.readdirSync(dir).filter(name => name.startsWith(temporary_prefix))
+			assert.equal(leftovers.length, 1, `${phase}: ${leftovers.join(', ')}`)
+
+			const retried = spawnSync(process.execPath, args, { cwd: dir, input: `${message}\n`, encoding: 'utf8' })
+			assert.equal(retried.status, 0, `${phase}: ${retried.stderr}`)
+			const output = JSON.parse(retried.stdout)
+			assert.equal(output.message.inserted, true, phase)
+			assert.equal(fs.readdirSync(dir).some(name => name.startsWith(temporary_prefix)), false, phase)
+			const notebook = fs.readFileSync(path.join(dir, phase === 'configuration' ? '.agentflow/devlog.md' : 'devlog.md'), 'utf8')
+			assert.equal((notebook.match(new RegExp(`\\+ ${message}`, 'gu')) || []).length, 1, phase)
+		} finally {
+			fs.rmSync(preload, { force: true })
+			drop(dir)
+		}
+	}
+})
+
+test('start stays conservative when a dead journal has phases but no verified baseline', () => {
+	const { dir, run } = make_repo({ prefix: 'agf-start-unproven-' })
+	try {
+		fs.appendFileSync(path.join(dir, 'devlog.md'), '\n---\n\n# → Ask / A-001\n\n+\n')
+		run(['add', 'devlog.md'])
+		run(['commit', '-m', 'prepare unproven startup'])
+		const header = { type: 'agentflow_start_lock', version: 1, pid: 2147483647, started_at: '2026-10-14 12:00:00 +0800', repository: dir, token: 'd'.repeat(32) }
+		fs.writeFileSync(path.join(dir, '.agentflow-start.lock'), `${JSON.stringify(header)}\n${JSON.stringify({ type: 'phase', name: 'configuration_initialized' })}\n`)
+		fs.writeFileSync(path.join(dir, '.gitignore'), '.claude/\n.codex/\n.worktrees/\n')
+		const result = spawnSync(process.execPath, [path.join(__dirname, 'agf.js'), 'start', '--repo', dir, '--host', 'codex', '--message-stdin', '--json'], {
+			cwd: dir, input: 'Keep prior changes visible\n', encoding: 'utf8',
+		})
+		assert.equal(result.status, 0, result.stderr)
+		const output = JSON.parse(result.stdout)
+		assert.equal(output.message.inserted, true)
+		assert.equal(output.stream_decision.reason, 'foreign_or_parallel_work')
+		assert.match(output.stream_decision.evidence.join(' '), /prior startup changes cannot be attributed to a verified baseline/u)
+		assert.ok(output.changed_paths.includes('.gitignore'))
+	} finally {
+		drop(dir)
+	}
+})
+
+test('start journals failures after each durable phase and retry does not duplicate owner input', () => {
+	const phases = ['ownership_checked', 'configuration_initialized', 'ignore_updated', 'hooks_verified', 'owner_input_scope_saved', 'owner_message_saved', 'startup_complete']
+	for (const phase of phases) {
+		const { dir, run } = make_repo({ prefix: `agf-start-phase-${phase}-` })
+		const preload = path.join(os.tmpdir(), `agf-start-failure-${process.pid}-${phase}.js`)
+		try {
+			fs.appendFileSync(path.join(dir, 'devlog.md'), '\n---\n\n# → Ask / A-001\n\n+\n')
+			run(['add', 'devlog.md'])
+			run(['commit', '-m', `prepare startup retry ${phase}`])
+			fs.writeFileSync(preload, [
+				`const locks = require(${JSON.stringify(path.join(__dirname, 'startup-lock.js'))})`,
+				'const append = locks.append',
+				'let injected = false',
+				`locks.append = (lock, record) => { append(lock, record); if (!injected && record.type === "phase" && record.name === ${JSON.stringify(phase)}) { injected = true; throw new Error("injected startup phase failure: ${phase}") } }`,
+			].join('\n'))
+			const args = [path.join(__dirname, 'agf.js'), 'start', '--repo', dir, '--host', 'codex', '--message-stdin', '--json']
+			const failed = spawnSync(process.execPath, ['--require', preload, ...args], { cwd: dir, input: 'Retry this exact request\n', encoding: 'utf8' })
+			assert.notEqual(failed.status, 0, phase)
+			assert.match(failed.stderr, new RegExp(`injected startup phase failure: ${phase}[\\s\\S]*Startup stopped during`, 'u'), phase)
+			assert.match(failed.stderr, /changed paths:/u, phase)
+			const after_failure = fs.readFileSync(path.join(dir, 'devlog.md'), 'utf8')
+			assert.equal((after_failure.match(/\+ Retry this exact request/gu) || []).length, phase === 'owner_message_saved' || phase === 'startup_complete' ? 1 : 0, phase)
+
+			const retried = spawnSync(process.execPath, args, { cwd: dir, input: 'Retry this exact request\n', encoding: 'utf8' })
+			assert.equal(retried.status, 0, `${phase}: ${retried.stderr}`)
+			const output = JSON.parse(retried.stdout)
+			assert.equal(output.message.inserted, !['owner_message_saved', 'startup_complete'].includes(phase), phase)
+			assert.equal(fs.existsSync(path.join(dir, '.agentflow-start.lock')), false, phase)
+			const final_text = fs.readFileSync(path.join(dir, 'devlog.md'), 'utf8')
+			assert.equal((final_text.match(/\+ Retry this exact request/gu) || []).length, 1, phase)
+		} finally {
+			fs.rmSync(preload, { force: true })
+			drop(dir)
+		}
 	}
 })
 
@@ -506,6 +877,26 @@ test('hooks forwards project host selection and removal through agf', () => {
 	assert.ok(fs.existsSync(path.join(dir, '.codex', 'hooks.json')))
 	assert.equal(agf.main(['hooks', '--project', '--host', 'codex', '--off'], dir, message => logs.push(message)), 0)
 	assert.doesNotMatch(fs.readFileSync(path.join(dir, '.codex', 'hooks.json'), 'utf8'), /stop-hook\.js/)
+	drop(dir)
+})
+
+test('hooks status separates registration from observed prompt and Stop invocations', () => {
+	const { dir } = make_repo()
+	const logs = []
+	agf.main(['hooks', '--project', '--host', 'codex'], dir, () => {})
+	assert.equal(agf.main(['hooks', '--status', '--project', '--host', 'codex'], dir, line => logs.push(line)), 0)
+	assert.ok(logs.some(line => line.includes('codex project hooks: available')))
+	assert.ok(logs.some(line => line.includes('UserPromptSubmit: no invocation receipt observed')))
+	assert.ok(logs.some(line => line.includes('does not prove the host loaded it')))
+
+	const hook_events = require('./hook-events.js')
+	fs.mkdirSync(path.join(dir, '.agentflow'), { recursive: true })
+	const ticket = hook_events.begin({ root: dir, host: 'codex', input: { hook_event_name: 'UserPromptSubmit', session_id: 'private-session', turn_id: 'observed-turn' } })
+	assert.ok(ticket)
+	hook_events.finish(ticket, { outcome: 'capture_saved' })
+	logs.length = 0
+	assert.equal(agf.main(['hooks', '--status', '--project', '--host', 'codex'], dir, line => logs.push(line)), 0)
+	assert.ok(logs.some(line => line.includes('codex UserPromptSubmit: completed — capture_saved')))
 	drop(dir)
 })
 
@@ -575,6 +966,11 @@ for (const command of ['init', 'start']) for (const first_host of ['codex', 'cla
 	}
 	try {
 		run(hosts[0])
+		if (command === 'start') {
+			assert.equal(fs.existsSync(install_hook.config_path_for(hosts[0], 'project', dir)), false)
+			assert.equal(fs.existsSync(path.join(dir, '.' + hosts[0])), false)
+			return
+		}
 		const first_path = install_hook.config_path_for(hosts[0], 'project', dir)
 		const original = fs.readFileSync(first_path, 'utf8')
 		assert.equal(fs.existsSync(path.join(dir, '.' + hosts[1])), false)
@@ -763,7 +1159,7 @@ const close_manifest = (root, delivery = { mode: 'local' }) => {
 		notebook: 'devlog.md',
 		ask: 'A-001',
 		run_events: [`## [RUN-001] Event — ${close_stamp()} (during round A-001)\n\n- The close command was tested.\n`],
-		reply: '# ← Reply / A-001\n\n## [SUMMARY]\n\n- The close command completed.\n\n## [FINAL REPORT]\n\n- The local closeout was verified.\n\n## Questions (batched — each with a suggested default)\n\n- None.\n',
+		reply: '# ← Reply / A-001\n\n## [SUMMARY]\n\n- Status: complete.\n- Result: the close command completed and the local closeout was verified.\n- Owner action: none.\n- Next step: none.\n\n## [FINAL REPORT]\n\n- The local closeout was verified.\n\n## Questions (batched — each with a suggested default)\n\n- None.\n',
 		status: {
 			project: 'demo — a test',
 			notebook: 'devlog.md',
@@ -834,7 +1230,7 @@ test('close and stop hook agree on the first commit with a persisted language se
 			notebook: notebook_path,
 			ask: 'A-001',
 			run_events: [`## [RUN-001] Event — ${close_stamp()} (during round A-001)\n\n- The first close was tested.\n`],
-			reply: '# ← Reply / A-001\n\n## [SUMMARY]\n\n- The first close completed.\n\n## Questions (batched — each with a suggested default)\n\n- None.\n',
+			reply: '# ← Reply / A-001\n\n## [SUMMARY]\n\n- Status: complete.\n- Result: the first close completed.\n- Owner action: none.\n- Next step: none.\n\n## Questions (batched — each with a suggested default)\n\n- None.\n',
 			status: { ...close_manifest(dir).status, notebook: notebook_path },
 			allowed_paths: [notebook_path, '.gitignore', 'ag.json'],
 			commit_message: 'record first close',
@@ -1360,6 +1756,10 @@ if (${JSON.stringify(mode === 'remote-delete-race')} && args[0] === 'push' && ar
 }
 if (${JSON.stringify(mode === 'inspection-failure')} && args[0] === 'for-each-ref' && args.includes('refs/heads/login-page')) process.exit(1)
 if (${JSON.stringify(mode === 'remote-inspection-failure')} && args[0] === 'ls-remote') process.exit(1)
+if (${JSON.stringify(mode === 'fetch-failure')} && args[0] === 'fetch' && args.includes('origin')) {
+  process.stderr.write('injected fetch failure\\n')
+  process.exit(1)
+}
 if (${JSON.stringify(mode === 'worktree-removal-failure')} && args[0] === 'worktree' && args[1] === 'remove') process.exit(1)
 const race_before_replace = ${JSON.stringify(mode === 'race-before-replace')}
 const is_head_identity = args[0] === 'rev-parse' && args[1] === '--verify' && args[2] === 'HEAD'
@@ -1401,6 +1801,27 @@ process.exit(result.status === null ? 1 : result.status)
 }
 
 // ----- agf new -----
+
+test('new refuses before writing project config or worktrees when shared Git metadata is read-only', () => {
+  const { dir, run } = make_repo()
+  const original_write = fs.writeFileSync
+  const logs = []
+  const config_before = fs.readFileSync(path.join(dir, 'ag.json'))
+  fs.writeFileSync = function(file, ...args) {
+    if (String(file).includes('.agf-write-probe-')) throw Object.assign(new Error('read-only file system'), { code: 'EROFS' })
+    return original_write.call(this, file, ...args)
+  }
+  let result
+  try { result = agf.main(['new', 'read only', 'read-only'], dir, line => logs.push(line)) }
+  finally { fs.writeFileSync = original_write }
+
+  assert.equal(result, 1)
+  assert.ok(logs.some(line => /Git metadata is not writable.*EROFS.*make that Git directory writable/i.test(line)))
+  assert.deepEqual(fs.readFileSync(path.join(dir, 'ag.json')), config_before)
+  assert.equal(run(['branch', '--list', 'read-only']).trim(), '')
+  assert.equal(fs.existsSync(path.join(dir, '.worktrees', 'read-only')), false)
+  drop(dir)
+})
 
 test('new opens branch, worktree, notebook and commit in a real repo', () => {
 	const { dir, run } = make_repo()
@@ -1523,12 +1944,33 @@ test('start in a stream writes only its notebook and keeps interrupted intake on
 		assert.equal(locked.status, 0, locked.stderr)
 		assert.equal(JSON.parse(locked.stdout).notebook, notebook)
 		assert.equal(JSON.parse(locked.stdout).message.reason, 'startup_lock_present')
-		assert.match(JSON.parse(locked.stdout).message.retry_instruction, /message was not saved.*Retry this exact startup.*fresh owner and notebook state/u)
+		assert.match(JSON.parse(locked.stdout).message.retry_instruction, /This retry did not write.*Inspect .*current Ask.*retry the same request/u)
 		assert.deepEqual(fs.readFileSync(path.join(worktree, notebook)), stream_before)
 		assert.deepEqual(fs.readFileSync(path.join(worktree, 'devlog.md')), root_before)
 	} finally {
 		drop(dir)
 	}
+})
+
+test('project installation startup in a linked worktree verifies the main checkout hooks without writing worktree hooks', () => {
+	const { dir } = make_repo()
+	try {
+		const skill_dir = path.join(dir, 'skills', 'agflow-frugal')
+		fs.mkdirSync(path.dirname(skill_dir), { recursive: true })
+		fs.cpSync(path.resolve(__dirname, '..'), skill_dir, { recursive: true })
+		require(path.join(skill_dir, 'scripts', 'install-hook.js')).install({ cwd: dir, hosts: ['codex'], quiet: true })
+		const main_hooks = path.join(dir, '.codex', 'hooks.json')
+		const main_hooks_before = fs.readFileSync(main_hooks)
+		const worktree = open_stream(dir, 'hook scope stream')
+		const result = spawnSync(process.execPath, [path.join(skill_dir, 'scripts', 'agf.js'), 'start', '--repo', worktree, '--host', 'codex', '--message-stdin', '--json'], {
+			cwd: worktree, input: 'Resume in the linked worktree.\n', encoding: 'utf8',
+		})
+		assert.equal(result.status, 0, result.stderr)
+		const output = JSON.parse(result.stdout)
+		assert.equal(Object.hasOwn(output, 'hooks'), false, JSON.stringify(output))
+		assert.equal(fs.existsSync(path.join(worktree, '.codex', 'hooks.json')), false)
+		assert.deepEqual(fs.readFileSync(main_hooks), main_hooks_before)
+	} finally { drop(dir) }
 })
 
 test('start refuses a missing stream configuration without falling back to root intake', () => {
@@ -1676,7 +2118,140 @@ test('finish remote preparation integrates the default branch without moving it,
 	assert.equal(run(['rev-parse', 'HEAD']).trim(), run(['ls-remote', 'origin', 'refs/heads/main']).split('\t')[0])
 	assert.ok(run(['log', '--format=%s', '-3']).includes('devlog: close stream for test'))
 	assert.ok(deliver_logs.some((line) => line.includes('delivered origin/main to the main checkout')))
+	const receipt_file = path.join(dir, '.git', 'agf-delivery-receipts', `login-page-${run(['rev-parse', 'HEAD']).trim()}.json`)
+	const receipt = JSON.parse(fs.readFileSync(receipt_file, 'utf8'))
+	assert.equal(receipt.remote.state, 'completed')
+	assert.equal(receipt.local.state, 'completed')
 	drop(dir)
+})
+
+test('finish remote delivery gives a preserving recovery when local and remote defaults diverge', () => {
+	const { dir, run, bare } = make_repo({ remote: true })
+	const wt = open_stream(dir, 'login page')
+	commit_stream_file(run, wt, 'feature.txt', 'feature\n')
+	commit_stream_file(run, dir, 'local-only.txt', 'keep this local commit\n', 'local-only work')
+	const local_tip = run(['rev-parse', 'HEAD']).trim()
+	assert.equal(agf.main(['finish', '--prep'], wt, () => {}), 0)
+	close_stream(run, wt, 'login-page')
+	const stream_tip = run(['rev-parse', 'HEAD'], wt).trim()
+	const logs = []
+
+	assert.equal(agf.main(['finish', '--deliver'], wt, message => logs.push(message)), 1)
+	assert.equal(run(['rev-parse', 'HEAD']).trim(), local_tip, 'the failed fast-forward must preserve the local default tip')
+	assert.equal(execFileSync('git', ['rev-parse', 'refs/heads/main'], { cwd: bare, encoding: 'utf8' }).trim(), stream_tip, 'remote delivery may complete before local recovery')
+	assert.ok(logs.some(line => line.includes('local main and origin/main have diverged')))
+	assert.ok(logs.some(line => line.includes('merge --no-edit \'origin/main\'')), logs.join('\n'))
+
+	// The suggested recovery incorporates the fetched remote tip without
+	// discarding the local-only commit.
+	run(['merge', '--no-edit', 'origin/main'])
+	assert.equal(run(['merge-base', '--is-ancestor', local_tip, 'HEAD'], dir), '')
+	assert.equal(run(['merge-base', '--is-ancestor', stream_tip, 'HEAD'], dir), '')
+	assert.equal(run(['show', 'HEAD:local-only.txt']).trim(), 'keep this local commit')
+	const receipt_path = path.join(dir, '.git', 'agf-delivery-receipts', `login-page-${stream_tip}.json`)
+	const partial_receipt = JSON.parse(fs.readFileSync(receipt_path, 'utf8'))
+	assert.equal(partial_receipt.remote.state, 'completed')
+	assert.equal(partial_receipt.local.state, 'failed')
+	const retry_logs = []
+	assert.equal(agf.main(['finish', '--deliver'], wt, message => retry_logs.push(message)).dir, dir)
+	assert.ok(retry_logs.some(line => line.includes('skipping repeat push')))
+	assert.ok(retry_logs.some(line => line.includes('skipping repeat merge')))
+	const completed_receipt = JSON.parse(fs.readFileSync(receipt_path, 'utf8'))
+	assert.equal(completed_receipt.remote.state, 'completed')
+	assert.equal(completed_receipt.local.state, 'completed')
+	drop(dir, bare)
+})
+
+test('finish refuses a malformed delivery receipt before changing remote or local refs', () => {
+	const { dir, run, bare } = make_repo({ remote: true })
+	const wt = open_stream(dir, 'login page')
+	commit_stream_file(run, wt, 'feature.txt', 'feature\n')
+	assert.equal(agf.main(['finish', '--prep'], wt, () => {}), 0)
+	close_stream(run, wt, 'login-page')
+	const stream_tip = run(['rev-parse', 'HEAD'], wt).trim()
+	const remote_before = execFileSync('git', ['ls-remote', 'origin', 'refs/heads/main'], { cwd: dir, encoding: 'utf8' }).split('\t')[0]
+	const local_before = run(['rev-parse', 'HEAD']).trim()
+	const receipt_path = path.join(dir, '.git', 'agf-delivery-receipts', `login-page-${stream_tip}.json`)
+	fs.mkdirSync(path.dirname(receipt_path), { recursive: true })
+	fs.writeFileSync(receipt_path, JSON.stringify({ version: 999 }))
+	const logs = []
+
+	assert.equal(agf.main(['finish', '--deliver'], wt, message => logs.push(message)), 1)
+	assert.equal(execFileSync('git', ['ls-remote', 'origin', 'refs/heads/main'], { cwd: dir, encoding: 'utf8' }).split('\t')[0], remote_before)
+	assert.equal(run(['rev-parse', 'HEAD']).trim(), local_before)
+	assert.ok(logs.some(line => line.includes('unsupported or mismatched format')))
+	drop(dir, bare)
+})
+
+test('finish delivery receipt resumes after remote success and local fetch failure without another push', () => {
+	const { dir, run, bare } = make_repo({ remote: true })
+	const wt = open_stream(dir, 'login page')
+	commit_stream_file(run, wt, 'feature.txt', 'feature\n')
+	assert.equal(agf.main(['finish', '--prep'], wt, () => {}), 0)
+	close_stream(run, wt, 'login-page')
+	const stream_tip = run(['rev-parse', 'HEAD'], wt).trim()
+	const local_before = run(['rev-parse', 'HEAD']).trim()
+	const wrapper = make_git_wrapper('fetch-failure')
+	const failed = spawnSync(process.execPath, [path.join(__dirname, 'agf.js'), 'finish', '--deliver'], {
+		cwd: wt,
+		encoding: 'utf8',
+		env: { ...process.env, PATH: `${wrapper.bin}${path.delimiter}${process.env.PATH}` },
+	})
+	assert.equal(failed.status, 1)
+	assert.match(failed.stderr, /remote default branch was updated but the main checkout was not — origin fetch failed/)
+	assert.equal(execFileSync('git', ['ls-remote', 'origin', 'refs/heads/main'], { cwd: dir, encoding: 'utf8' }).split('\t')[0], stream_tip)
+	assert.equal(run(['rev-parse', 'HEAD']).trim(), local_before)
+	const receipt_path = path.join(dir, '.git', 'agf-delivery-receipts', `login-page-${stream_tip}.json`)
+	const partial = JSON.parse(fs.readFileSync(receipt_path, 'utf8'))
+	assert.equal(partial.remote.state, 'completed')
+	assert.equal(partial.local.state, 'failed')
+	const retry_logs = []
+	assert.equal(agf.main(['finish', '--deliver'], wt, message => retry_logs.push(message)).dir, dir)
+	assert.ok(retry_logs.some(line => line.includes('skipping repeat push')))
+	assert.equal(run(['rev-parse', 'HEAD']).trim(), stream_tip)
+	assert.equal(JSON.parse(fs.readFileSync(receipt_path, 'utf8')).local.state, 'completed')
+	drop(dir, bare, wrapper.bin)
+})
+
+test('finish delivery timeout persists unknown remote state and retries from the observed tip', () => {
+	const { dir, run, bare } = make_repo({ remote: true })
+	const wt = open_stream(dir, 'login page')
+	commit_stream_file(run, wt, 'feature.txt', 'feature\n')
+	assert.equal(agf.main(['finish', '--prep'], wt, () => {}), 0)
+	close_stream(run, wt, 'login-page')
+	const stream_tip = run(['rev-parse', 'HEAD'], wt).trim()
+	const local_before = run(['rev-parse', 'HEAD']).trim()
+	const remote_before = run(['ls-remote', 'origin', 'refs/heads/main']).split('\t')[0]
+	const receipt_path = path.join(dir, '.git', 'agf-delivery-receipts', `login-page-${stream_tip}.json`)
+	const hook = path.join(bare, 'hooks', 'pre-receive')
+	fs.writeFileSync(hook, '#!/bin/sh\nsleep 1\nexit 0\n', { mode: 0o755 })
+	const previous_timeout = process.env.AGF_TEST_GIT_TIMEOUT_MS
+	const timeout_logs = []
+	try {
+		process.env.AGF_TEST_GIT_TIMEOUT_MS = '50'
+		assert.equal(agf.main(['finish', '--deliver'], wt, message => timeout_logs.push(message)), 1)
+	} finally {
+		if (previous_timeout === undefined) delete process.env.AGF_TEST_GIT_TIMEOUT_MS
+		else process.env.AGF_TEST_GIT_TIMEOUT_MS = previous_timeout
+	}
+	assert.ok(timeout_logs.some(message => /timed out after 50ms.*result is unknown/u.test(message)), timeout_logs.join('\n'))
+	const uncertain = JSON.parse(fs.readFileSync(receipt_path, 'utf8'))
+	assert.equal(uncertain.remote.state, 'unknown')
+	assert.equal(uncertain.local.state, 'pending')
+	const remote_after_timeout = run(['ls-remote', 'origin', 'refs/heads/main']).split('\t')[0]
+	assert.ok([remote_before, stream_tip].includes(remote_after_timeout), remote_after_timeout)
+	assert.equal(run(['rev-parse', 'HEAD']).trim(), local_before)
+
+	fs.rmSync(hook)
+	const retry_logs = []
+	assert.equal(agf.main(['finish', '--deliver'], wt, message => retry_logs.push(message)).dir, dir)
+	const completed = JSON.parse(fs.readFileSync(receipt_path, 'utf8'))
+	assert.equal(completed.remote.state, 'completed')
+	assert.equal(completed.local.state, 'completed')
+	assert.equal(run(['rev-parse', 'HEAD']).trim(), stream_tip)
+	assert.equal(run(['ls-remote', 'origin', 'refs/heads/main']).split('\t')[0], stream_tip)
+	if (remote_after_timeout === stream_tip) assert.ok(retry_logs.some(message => /already contains.*skipping repeat push/u.test(message)), retry_logs.join('\n'))
+	drop(dir, bare)
 })
 
 test('finish local-only preparation and delivery never need a remote', () => {
@@ -1699,6 +2274,11 @@ test('finish local-only preparation and delivery never need a remote', () => {
 	const delivered = agf.main(['finish', '--deliver'], wt, () => {})
 	assert.equal(delivered.dir, dir)
 	assert.equal(run(['rev-parse', 'HEAD']), run(['rev-parse', 'login-page']))
+	const local_tip = run(['rev-parse', 'HEAD']).trim()
+	const receipt_file = path.join(dir, '.git', 'agf-delivery-receipts', `login-page-${local_tip}.json`)
+	const receipt = JSON.parse(fs.readFileSync(receipt_file, 'utf8'))
+	assert.equal(receipt.remote.state, 'not_configured')
+	assert.equal(receipt.local.state, 'completed')
 	assert.ok(!fs.existsSync(agf.delivery_lock_path({ git_common_dir: path.join(dir, '.git') })))
 	drop(dir)
 })
@@ -2145,6 +2725,44 @@ test('finish delivery preserves a replacement lock and emits no directory stdout
 	assert.equal(fs.readFileSync(lock, 'utf8'), replacement)
 	assert.equal(run(['rev-parse', 'main']).trim(), validated_tip)
 	drop(dir, wrapper.bin)
+})
+
+test('finish delivery completes when delivery-lock writes accept only partial buffers', () => {
+	const { dir, run } = make_repo()
+	try {
+		const wt = open_stream(dir, 'login page')
+		commit_stream_file(run, wt, 'feature.txt', 'feature\n')
+		assert.equal(agf.main(['finish', '--prep'], wt, () => {}), 0)
+		close_local_stream(run, wt, 'login-page')
+		const lock = agf.delivery_lock_path({ git_common_dir: path.join(dir, '.git') })
+		const original_open = fs.openSync
+		const original_write = fs.writeSync
+		let lock_fd = null
+		let partial_writes = 0
+		fs.openSync = function (file, ...args) {
+			const fd = original_open.call(fs, file, ...args)
+			if (file === lock) lock_fd = fd
+			return fd
+		}
+		fs.writeSync = function (...args) {
+			const [fd, buffer, offset, length] = args
+			if (fd !== lock_fd) return original_write.apply(fs, args)
+			assert.ok(Buffer.isBuffer(buffer), 'delivery lock uses the short-write-safe buffer writer')
+			partial_writes += 1
+			return original_write.call(fs, fd, buffer, offset, Math.min(length, 5))
+		}
+		try {
+			assert.equal(agf.main(['finish', '--deliver'], wt, () => {}).dir, dir)
+			assert.ok(partial_writes > 1, `expected retry after a short write, got ${partial_writes} write`)
+			assert.equal(run(['rev-parse', 'main']).trim(), run(['rev-parse', 'HEAD'], wt).trim())
+			assert.equal(fs.existsSync(lock), false)
+		} finally {
+			fs.openSync = original_open
+			fs.writeSync = original_write
+		}
+	} finally {
+		drop(dir)
+	}
 })
 
 test('finish delivery reports truthful partial state when lock unlink fails after Git delivery', () => {
@@ -3077,7 +3695,7 @@ test('close accepts cosmetic Reply headings and reports warnings', () => {
   const fixture = close_fixture()
   try {
     const manifest = close_manifest(fixture.dir)
-    manifest.reply = '### Summary\n\nCompleted the requested work.\n\n### Final report\n\nThe regression passed.\n\n### Questions\n\n- None.\n'
+    manifest.reply = '### Summary\n\n- Status: complete.\n- Result: completed the requested work; the regression passed.\n- Owner action: none.\n- Next step: none.\n\n### Final report\n\nThe regression passed.\n\n### Questions\n\n- None.\n'
     const result = spawnSync(process.execPath, [path.join(__dirname, 'agf.js'), 'close', '--manifest-stdin'], { cwd: fixture.dir, input: JSON.stringify(manifest), encoding: 'utf8' })
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`)
     assert.ok(JSON.parse(result.stdout).warnings.some(check => check.id === 'reply_structure'))

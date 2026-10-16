@@ -650,6 +650,7 @@ const lint_tracker = facts => {
   const warnings = [...parsed_sections.warnings];
   if (text !== original_text) warnings.push('tracker bullet presentation differs from the template');
   const errors = [];
+  if (facts.initiative_state?.status === 'fail') errors.push(`linked initiative state conflicts: ${facts.initiative_state.errors.join('; ')}`);
   const fields = {};
   const require_fields = (section_name, names) => names.forEach(name => {
     const result = tracker_field(sections[section_name], name);
@@ -855,14 +856,25 @@ const lint_terminal_output = (terminal_output, inline_reply = 'off', devlog_text
   if (terminal_output !== undefined && inline_reply === 'on') {
     const saved = parse_devlog(devlog_text).rounds.filter(round => round.reply_text.trim()).at(-1)?.reply_text.replace(/\r?\n---\s*$/u, '').trim();
     return String(terminal_output).trim() === saved
-      ? make_check('terminal_one_line', 'Terminal output matches saved Reply', 'pass', 'inline Reply matches the saved notebook')
-      : make_check('terminal_one_line', 'Terminal output matches saved Reply', 'warn', 'presentation only: inline output should match the saved Reply');
+      ? make_check('terminal_one_line', 'Visible output matches saved Reply', 'pass', 'inline Reply matches the saved notebook')
+      : make_check('terminal_one_line', 'Visible output matches saved Reply', 'fail', 'inline output does not match the saved Reply');
   }
   if (terminal_output === undefined) {
     return make_check('terminal_one_line', 'Terminal output is one line', 'skip', 'terminal output was not provided');
   }
 
 	const trimmed_output = String(terminal_output).trim();
+	const saved_reply = parse_devlog(devlog_text).rounds.filter(round => round.reply_text.trim()).at(-1)?.reply_text.replace(/\r?\n---\s*$/u, '').trim();
+	if (saved_reply) {
+		const summary = reply_summary_text(saved_reply).trim() || saved_reply;
+		if (!trimmed_output.includes(summary)) {
+			return make_check('terminal_one_line', 'Visible output includes the saved stop summary', 'fail', 'default closeout output omits or changes the saved SUMMARY');
+		}
+		if (!trimmed_output.endsWith(' updated')) {
+			return make_check('terminal_one_line', 'Visible output includes the saved stop summary', 'fail', 'default closeout output does not end with the notebook update path');
+		}
+		return make_check('terminal_one_line', 'Visible output includes the saved stop summary', 'pass', 'required stop summary and notebook update path are visible');
+	}
 	const line_count = trimmed_output.length === 0 ? 0 : trimmed_output.split(/\r\n|\r|\n/).length;
 	const reasons = [];
 	const update_lines = trimmed_output.split(/\r\n|\r|\n/);
@@ -1930,8 +1942,8 @@ const lint_status_projection = (devlog_text, required) => {
     : make_check('status_projection_valid', 'STATUS uses the fixed projection', 'fail', result.errors.join('; '));
 };
 
-// Presentation is advisory. Empty report content remains a substantive failure;
-// trusted coverage and material-claim checks independently verify completeness.
+// Cosmetic presentation is advisory. Required stop-report fields and empty
+// report content are substantive failures; claim accuracy remains a host check.
 const reply_sections = text => {
   const headings = [...unfenced_text(text).matchAll(/^(#{1,6})[ \t]+(.+?)[ \t]*\r?$/gmu)];
   return headings.map(heading => ({
@@ -1940,6 +1952,59 @@ const reply_sections = text => {
     index: heading.index,
     body: text.slice(heading.index + heading[0].length, headings.find(next => next.index > heading.index && next[1].length <= heading[1].length)?.index ?? text.length).trim()
   }));
+};
+
+const reply_summary_text = reply_text => reply_sections(reply_text)
+  .find(section => section.label === 'summary')?.body ?? '';
+
+const stop_report_field = label => {
+  const normalized = String(label || '').replace(/\*/gu, '').trim().toLowerCase();
+  if (['status', 'task status'].includes(normalized)) return 'status';
+  if (['result', 'what happened'].includes(normalized)) return 'result';
+  if (['cause', 'error or blocker'].includes(normalized)) return 'cause';
+  if (['owner action', 'your action'].includes(normalized)) return 'owner_action';
+  if (['next', 'next step'].includes(normalized)) return 'next';
+  return null;
+};
+
+const stop_report_errors = (summary, subject = 'stop SUMMARY') => {
+  const fields = new Map();
+  for (const section of reply_sections(summary)) {
+    const field = stop_report_field(section.label);
+    if (field && section.body) fields.set(field, section.body);
+  }
+  for (const line of String(summary || '').split(/\r?\n/u)) {
+    const match = /^\s*(?:[-*+]\s+)?(?:\*\*(.+?):\*\*|(.+?):)\s*(.*)$/u.exec(line);
+    if (!match) continue;
+    const field = stop_report_field(match[1] ?? match[2]);
+    if (field && match[3].trim()) fields.set(field, match[3].trim());
+  }
+
+  const errors = [];
+  const required = ['status', 'result', 'owner_action', 'next'];
+  const missing = required.filter(field => !fields.has(field));
+  if (missing.length) errors.push(`${subject} is missing ${missing.map(field => ({ status: 'Status', result: 'Result', owner_action: 'Owner action', next: 'Next step' })[field]).join(', ')}`);
+
+  const status = fields.get('status')?.trim() ?? '';
+  const complete = /^(?:complete|completed|done|closed)\b/iu.test(status);
+  const incomplete = /^(?:incomplete|not complete|blocked|waiting|paused|stopped|in progress|ongoing)\b/iu.test(status);
+  if (status && !complete && !incomplete) errors.push(`${subject} Status must clearly identify complete or incomplete work`);
+  if (incomplete && !fields.has('cause')) errors.push(`incomplete ${subject} is missing Cause or Error or blocker`);
+  return errors;
+};
+
+const lint_active_stop_report = (devlog_text, terminal_output, stop_event) => {
+  if (stop_event !== true) return make_check('active_stop_report', 'Active stop contains its report', 'skip', 'this is not a Stop event');
+  const parsed = parse_devlog(devlog_text);
+  const current_round = parsed.rounds.find(round => round.text === parsed.last_round);
+  if (!current_round || current_round.ask_text.trim() === '' || current_round.reply_text.trim() !== '') {
+    return make_check('active_stop_report', 'Active stop contains its report', 'skip', 'there is no open nonempty Ask without a completed Reply');
+  }
+  if (typeof terminal_output !== 'string' || terminal_output.trim() === '') {
+    return make_check('active_stop_report', 'Active stop contains its report', 'fail', 'the latest assistant response is unavailable; the active stop report cannot be checked');
+  }
+  const errors = stop_report_errors(terminal_output, 'visible stop report');
+  return make_check('active_stop_report', 'Active stop contains its report', errors.length ? 'fail' : 'pass', errors.join('; ') || 'the visible response contains the required stop fields');
 };
 
 const lint_reply_structure = (devlog_text, substantial) => {
@@ -1966,6 +2031,8 @@ const lint_reply_structure = (devlog_text, substantial) => {
   }
   const report_content = reply_body.replace(/^\* _[^\r\n]*_\s*$/gmu, '').replace(/^#{1,6}[^\r\n]*$/gmu, '').replace(/^---\s*$/gmu, '').trim();
   if (!report_content) errors.push('Reply has no report content');
+  const summary = sections.find(section => section.label === 'summary');
+  errors.push(...stop_report_errors(summary?.body ?? reply_body, 'stop SUMMARY'));
   return make_check('reply_structure', 'Reply contains its report', errors.length ? 'fail' : warnings.length ? 'warn' : 'pass', [...errors, ...warnings].join('; ') || 'the report sections are present, ordered and non-empty');
 };
 
@@ -2120,6 +2187,63 @@ const final_report_body = devlog_text => {
 
   const reply_body = last_round.slice(reply_match.index + reply_match[0].length);
   return reply_sections(reply_body).find(section => section.label === 'final report')?.body ?? null;
+};
+
+const lint_outcome_coverage = (devlog_text, repository_state) => {
+  const changed_files = repository_state?.changed_files;
+  if (!Array.isArray(changed_files)) {
+    return make_check('outcome_coverage', 'Implementation outcomes match the request', 'skip', 'changed-file facts were not provided');
+  }
+  const implementation_path = /\.(?:[cm]?[jt]sx?|py|go|rs|java|cs|c|h|cpp|rb|sh)$/iu;
+  const instruction_path = /^skills\/.*\.md$/iu;
+  if (!changed_files.some(file => implementation_path.test(file) || instruction_path.test(file))) {
+    return make_check('outcome_coverage', 'Implementation outcomes match the request', 'skip', 'no implementation or skill-instruction file changed');
+  }
+
+  const parsed = parse_devlog(devlog_text);
+  const round = parsed.rounds.find(item => item.text === parsed.last_round);
+  if (!round || !round.reply_text.trim()) {
+    return make_check('outcome_coverage', 'Implementation outcomes match the request', 'skip', 'implementation work is still in progress');
+  }
+  const report = final_report_body(devlog_text);
+  if (report === null) {
+    return make_check('outcome_coverage', 'Implementation outcomes match the request', 'fail', 'implementation closeout needs an Outcome coverage table in the final report');
+  }
+  const plain_report = unfenced_text(report);
+  const sections = [...plain_report.matchAll(/^#{2,4} Outcome coverage\s*$/gimu)];
+  if (sections.length !== 1) {
+    return make_check('outcome_coverage', 'Implementation outcomes match the request', 'fail', 'implementation closeout needs exactly one Outcome coverage section');
+  }
+  const start = sections[0].index + sections[0][0].length;
+  const remaining = plain_report.slice(start);
+  const next_heading = /^#{1,6} /mu.exec(remaining);
+  const section = next_heading ? remaining.slice(0, next_heading.index) : remaining;
+  const table_lines = section.split(/\r?\n/u).flatMap(line => {
+    const match = /^ {0,3}(\|.*\|)[ \t]*$/u.exec(line);
+    return match ? [match[1]] : [];
+  });
+  const cells = line => line.split('|').slice(1, -1).map(cell => cell.trim().toLowerCase());
+  const expected_header = ['requested outcome', 'delivered result', 'evidence', 'status'];
+  if (table_lines.length < 3 || JSON.stringify(cells(table_lines[0])) !== JSON.stringify(expected_header) || !/^\|\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*){3}\|$/u.test(table_lines[1])) {
+    return make_check('outcome_coverage', 'Implementation outcomes match the request', 'fail', 'Outcome coverage must be a Markdown table with Requested outcome, Delivered result, Evidence, and Status columns');
+  }
+
+  const outcomes = new Set();
+  const errors = [];
+  for (const [index, line] of table_lines.slice(2).entries()) {
+    const row = cells(line);
+    if (row.length !== 4 || row.some(value => value.length === 0)) {
+      errors.push(`outcome row ${index + 1} must fill all four columns`);
+      continue;
+    }
+    if (outcomes.has(row[0])) errors.push(`outcome row ${index + 1} duplicates a requested outcome`);
+    outcomes.add(row[0]);
+    if (row[3] === 'not proven') errors.push(`outcome row ${index + 1} is not proven`);
+    else if (row[3] !== 'verified') errors.push(`outcome row ${index + 1} status must be Verified or Not proven`);
+  }
+  return errors.length === 0
+    ? make_check('outcome_coverage', 'Implementation outcomes match the request', 'pass', `${outcomes.size} requested outcome(s) have a delivered result and evidence and are marked verified`)
+    : make_check('outcome_coverage', 'Implementation outcomes match the request', 'fail', errors.join('; '));
 };
 
 const lint_round_reporting = (facts, devlog_text, verbosity = 'all') => {
@@ -3449,6 +3573,7 @@ const lint_round = context => {
       ? [make_check('fast_lane_task', 'Fast-lane activation waits for a task', 'fail', 'bare fast-lane must remain open until a task arrives; do not close an activation-only round')]
       : []),
     lint_terminal_output(context.terminal_output, context['inline-reply'], devlog_text),
+    lint_active_stop_report(devlog_text, context.terminal_output, context.stop_event),
     lint_timestamps(devlog_text, now_ms, future_skew_min, max_age_hours),
     lint_reply_structure(devlog_text, substantial),
     lint_round_boundaries(devlog_text),
@@ -3457,6 +3582,7 @@ const lint_round = context => {
     lint_checkpoint_still_to_do(devlog_text),
     lint_checkpoint_verification(devlog_text, context.checkpoint_verification),
     lint_round_reporting(reporting_facts, devlog_text, context['log-verbosity']),
+    lint_outcome_coverage(devlog_text, context.repository_state),
     workflow_check('direct_route_completion', () => lint_direct_route_completion(direct_facts, context)),
     lint_evidence_classification(context.evidence_classification ?? context.defect_classes),
     lint_material_claims(material_claim_facts),
@@ -3536,6 +3662,7 @@ module.exports = {
   parse_advisor_selection,
   parse_devlog,
   parse_numeric_timestamp,
+  reply_summary_text,
   record_heading_has_valid_taipei_timestamp,
   record_heading_has_valid_local_timestamp,
   resolve_commit_prefix,

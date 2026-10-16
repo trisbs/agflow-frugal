@@ -101,7 +101,8 @@ for (const mode of ['normal', 'inline', 'resume', 'comma-resume', 'cosmetic', 'n
 		const first_output = transcript_json(first.stdout);
 		assert.equal(first_output.active_host, 'codex');
 		assert.equal(first_output.setup_created, !non_git);
-		assert.equal(first_output.hooks_restart_required, !non_git);
+		assert.equal(first_output.hooks_restart_required, false);
+		assert.equal(first_output.hooks.status, 'missing');
 		assert.equal(first_output.message.inserted, true);
 		assert.equal(first_output.stream_decision.reason, non_git ? 'not_git_repository' : 'bootstrap_files_only');
 		assert.equal(first_output.current_ask_identifier, 'A-001');
@@ -136,8 +137,8 @@ for (const mode of ['normal', 'inline', 'resume', 'comma-resume', 'cosmetic', 'n
 				'- The terminal journey passed.\n',
 			],
 			reply: mode === 'cosmetic'
-				? '### Summary\n\nThe journey completed.\n\n### Final report\n\nStart, restart, and close-round were verified.\n\n### Questions\n\n- None.\n'
-				: '## [SUMMARY]\n\n- The journey completed.\n\n## [FINAL REPORT]\n\n- Start, restart, and close-round were verified.\n\n```completion-metadata\nHost review: PASS — inspected the fixture change and terminal evidence; no blocking findings.\n' + (trivial ? 'Non-behavioral change: notes.md — routine explanatory prose with no operating instructions\nNon-behavioral change: display.css — comment text only; no rendering behavior\n' : '') + '```\n',
+				? '### Summary\n\n- **Status:** complete\n- **Result:** The journey completed and closeout was verified.\n- **Owner action:** none\n- **Next step:** no further action is needed.\n\n### Final report\n\nStart, restart, and close-round were verified.\n\n### Questions\n\n- None.\n'
+				: '## [SUMMARY]\n\n- Status: complete.\n- Result: The journey completed and closeout was verified.\n- Owner action: none.\n- Next step: no further action is needed.\n\n## [FINAL REPORT]\n\n- Start, restart, and close-round were verified.\n\n```completion-metadata\nHost review: PASS — inspected the fixture change and terminal evidence; no blocking findings.\n' + (trivial ? 'Non-behavioral change: notes.md — routine explanatory prose with no operating instructions\nNon-behavioral change: display.css — comment text only; no rendering behavior\n' : '') + '```\n' + ((fast_lane || waiver || archive_retry) ? '\n### Outcome coverage\n\n| Requested outcome | Delivered result | Evidence | Status |\n| --- | --- | --- | --- |\n| Verify the requested terminal workflow | Start, capture, and close completed | Real PTY journey and close result | Verified |\n' : '') + '\n## Questions (batched — each with a suggested default)\n\n- None.\n',
 			status: { project: 'terminal journey', notebook, notebook_kind: 'root', current_commit: 'pending', tests_scenarios: 'real PTY journey', config_path: 'ag.json', host: 'codex', validation: 'validated', proven: 'terminal journey', open: 'none', next: 'await owner', artifacts: 'none', archived_eras: 'none', streams: [] },
 			allowed_paths: [notebook, '.gitignore', 'ag.json', ...(fast_lane || waiver || archive_retry ? ['fixture.js'] : []), ...(trivial ? ['notes.md', 'display.css'] : []), ...(archive_retry ? ['.agentflow/devlog.archive.md'] : [])],
 			commit_message: 'record terminal close journey',
@@ -157,7 +158,7 @@ for (const mode of ['normal', 'inline', 'resume', 'comma-resume', 'cosmetic', 'n
 			assert.equal(fs.existsSync(path.join(root, '.agentflow/.tmp/A-001/completion.json')), true);
 			require('./notebook-write').append_input({ root, notebook, text: 'fast-lane', host: 'codex' });
 			const corrected = JSON.parse(close_input);
-			corrected.reply = corrected.reply.replace('The journey completed.', 'The archive retry completed.').replace('inspected the fixture change', 'inspected the archive retry and fixture change');
+			corrected.reply = corrected.reply.replace('The journey completed and closeout was verified.', 'The archive retry completed and closeout was verified.').replace('inspected the fixture change', 'inspected the archive retry and fixture change');
 			corrected.status.archived_eras = '.agentflow/devlog.archive.md';
 			close_input = JSON.stringify(corrected);
 		}
@@ -242,7 +243,7 @@ test('real PTY startup detects the computer language and preserves the saved cho
 	assert.equal(fs.readFileSync(config_path, 'utf8'), saved);
 });
 
-test('active-host real PTY startup adds the other host only when it runs', () => {
+test('active-host real PTY startup does not mutate either host config', () => {
 	const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agf-host-journey-')));
 	let prior_host;
 	for (const host of ['codex', 'codex', 'claude', 'claude']) {
@@ -253,7 +254,7 @@ test('active-host real PTY startup adds the other host only when it runs', () =>
 		assert.match(result.stdout, /\/dev\/(?:tty|pts\/)/);
 		assert.match(result.stdout, /active host journey/);
 		assert.equal(transcript_json(result.stdout).active_host, host);
-		assert.ok(fs.existsSync(path.join(root, '.codex', 'hooks.json')));
-		assert.equal(fs.existsSync(path.join(root, '.claude')), host === 'claude');
+		assert.equal(fs.existsSync(path.join(root, '.codex', 'hooks.json')), false);
+		assert.equal(fs.existsSync(path.join(root, '.claude')), false);
 	}
 });

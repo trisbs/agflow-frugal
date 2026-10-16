@@ -167,7 +167,7 @@ test('godev continue remains an ordinary captured prompt and resumes through sta
 test('operational skill routes exact help requests before startup and keeps continuation on normal workflow', () => {
 	const skill = fs.readFileSync(path.join(skill_root, 'SKILL.md'), 'utf8');
 	const help_start = skill.indexOf('For an exact `godev help`');
-	const startup = skill.indexOf('The first and only startup call');
+	const startup = skill.indexOf('## Start here');
 	assert.notEqual(help_start, -1, 'skill must document the help fast path');
 	assert.ok(help_start < startup, 'help routing must precede startup instructions');
 	const help_rule = skill.slice(help_start, startup);

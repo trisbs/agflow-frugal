@@ -173,7 +173,7 @@ const check_agf_function = (shell, cfg_path, script_paths = agf_script_for(SKILL
     : /(?:^|\n)\s*(?:function\s+)?agf\s*(?:\(\s*\))?\s*\{/g
   const declaration_count = (normalized.match(declaration_pattern) || []).length
   const ok = has_exact_block && declaration_count === 1
-  return { ok, label: ok ? `agf() found in ${cfg_path}` : `usable Agentflow-managed agf() not found in ${cfg_path}` }
+  return { ok, label: ok ? `agf() configured in ${cfg_path}; this does not prove the current shell loaded it` : `usable Agentflow-managed agf() not found in ${cfg_path}` }
 }
 
 const check_looper_function = (shell, cfg_path, script_paths = looper_script_for(SKILL_DIR)) => {

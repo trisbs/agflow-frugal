@@ -93,6 +93,22 @@ test('check_agf_function detects zsh/bash function', () => {
   drop(dir)
 })
 
+test('check_agf_function distinguishes saved shell configuration from active command availability', () => {
+  const dir = tmp()
+  const skill = path.join(dir, 'skill')
+  fs.mkdirSync(skill)
+  write_fake_agf(skill)
+  const cfg = path.join(dir, '.zshrc')
+  fs.writeFileSync(cfg, setup.lines_to_append('zsh', true, false, skill))
+
+  const result = setup.check_agf_function('zsh', cfg, path.join(skill, 'scripts', 'agf.js'))
+  assert.equal(result.ok, true)
+  assert.match(result.label, /configured in .*\.zshrc/i)
+  assert.match(result.label, /does not prove.*current shell.*loaded/i)
+
+  drop(dir)
+})
+
 test('check_agf_function accepts harmless indentation differences in a managed function', () => {
   const dir = tmp()
   const cfg = path.join(dir, '.zshrc')

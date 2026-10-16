@@ -180,8 +180,7 @@ test('startup and closeout guidance contains the complete fast-path contract', (
 	for (const field of ['version', 'notebook', 'ask', 'run_events', 'reply', 'status', 'allowed_paths', 'commit_message', 'delivery']) {
 		assert.match(skill, new RegExp(`"${field}"`))
 	}
-	assert.match(skill, /next_run_id/)
-	assert.match(skill, /and changed paths/)
+	assert.match(skill, /inspect changed paths/)
 	assert.match(skill, /setup-created `.gitignore` and `ag.json`/)
 	assert.match(skill, /Never use a pseudo-terminal or `tty: true`/)
 	assert.match(skill, /writer owns numbering and time/)

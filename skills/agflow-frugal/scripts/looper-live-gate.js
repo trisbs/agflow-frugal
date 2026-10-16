@@ -145,7 +145,7 @@ const install_shortcut = ({ home, skill_dir }) => {
 const execute_gate = (options = {}) => {
   const skill_dir = path.resolve(options.skill_dir || path.join(__dirname, '..'))
   const codex_home = process.env.CODEX_HOME || path.join(os.homedir(), '.codex')
-  const scratch = path.join(os.homedir(), 'tmp')
+  const scratch = path.join(process.env.AGFLOW_TEST_HOME || os.homedir(), 'tmp')
   fs.mkdirSync(scratch, { recursive: true })
   if (fs.lstatSync(scratch).isSymbolicLink()) throw fail('home scratch directory must not be a symlink')
   const temporary_root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentflow-looper-live-gate-'))
