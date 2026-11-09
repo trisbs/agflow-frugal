@@ -1,13 +1,13 @@
 {
-  "name": "agentflow",
+  "name": "agflow-frugal",
   "owner": {
-    "name": "agfnow"
+    "name": "trisbs"
   },
   "plugins": [
     {
-      "name": "agentflow",
+      "name": "agflow-frugal",
       "source": "./",
-      "description": "A project notebook for Codex and Claude Code, with resumable work, optional planning, and independent review."
+      "description": "Agentflow Frugal: a compatibility-first project notebook for Codex and Claude Code with bounded Plus-oriented routing."
     }
   ]
 }
